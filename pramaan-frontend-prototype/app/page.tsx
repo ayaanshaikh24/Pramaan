@@ -60,9 +60,11 @@ export default function PramaanApp() {
 
   // Browser-side face presence detection state
   const [faceState, setFaceState] = useState<FacePresenceState>({
+    liveState: 'DETECTOR_LOADING',
     isLiveActive: false,
     faceVisible: true,
     confidence: 94,
+    motionScore: 94,
     isCovered: false,
     isOutsideFrame: false,
     missingDurationMs: 0,
@@ -70,6 +72,7 @@ export default function PramaanApp() {
     detectorType: 'none',
   })
   const hiddenVideoRef = useRef<HTMLVideoElement>(null)
+  const activeVideoRef = useRef<HTMLVideoElement | null>(null)
   const missingStartTimeRef = useRef<number | null>(null)
   const wasMissingRef = useRef<boolean>(false)
   const isSamplingRef = useRef<boolean>(false)
@@ -519,11 +522,24 @@ export default function PramaanApp() {
       })
       setStream(mediaStream)
       setCameraError(null)
+      setFaceState((prev) => ({
+        ...prev,
+        liveState: prev.detectorStatus === 'ready' ? 'FACE_VISIBLE' : 'DETECTOR_LOADING',
+        isLiveActive: true,
+        faceVisible: true,
+        confidence: 96,
+        motionScore: 94,
+      }))
       notify('Local camera and microphone connected')
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Camera access denied'
       setCameraError(errorMsg)
-      notify('Camera permission denied — simulated session active')
+      setFaceState((prev) => ({
+        ...prev,
+        liveState: 'CAMERA_PERMISSION_DENIED',
+        isLiveActive: false,
+      }))
+      notify('Camera permission denied')
     }
   }
 
@@ -535,9 +551,11 @@ export default function PramaanApp() {
       wasMissingRef.current = false
       setFaceState((prev) => ({
         ...prev,
+        liveState: 'DETECTOR_LOADING',
         isLiveActive: false,
         faceVisible: true,
         confidence: 94,
+        motionScore: 94,
         isCovered: false,
         isOutsideFrame: false,
         missingDurationMs: 0,
@@ -557,6 +575,11 @@ export default function PramaanApp() {
         ...prev,
         detectorStatus: res.success ? 'ready' : 'unavailable',
         detectorType: res.detectorType,
+        liveState: res.success
+          ? prev.isLiveActive
+            ? 'FACE_VISIBLE'
+            : prev.liveState
+          : 'DETECTOR_UNAVAILABLE',
       }))
     })
     return () => {
@@ -570,16 +593,24 @@ export default function PramaanApp() {
       if (stream) {
         hiddenVideoRef.current.srcObject = stream
         hiddenVideoRef.current.play().catch(() => {})
-        setFaceState((prev) => ({ ...prev, isLiveActive: currentScenario === 'normal' }))
+        setFaceState((prev) => ({
+          ...prev,
+          liveState: prev.detectorStatus === 'ready' ? 'FACE_VISIBLE' : 'DETECTOR_LOADING',
+          isLiveActive: currentScenario === 'normal',
+          faceVisible: true,
+          confidence: 94,
+        }))
       } else {
         hiddenVideoRef.current.srcObject = null
         missingStartTimeRef.current = null
         wasMissingRef.current = false
         setFaceState((prev) => ({
           ...prev,
+          liveState: 'DETECTOR_LOADING',
           isLiveActive: false,
           faceVisible: true,
           confidence: 94,
+          motionScore: 94,
           isCovered: false,
           isOutsideFrame: false,
           missingDurationMs: 0,
@@ -595,11 +626,16 @@ export default function PramaanApp() {
     }
 
     const interval = setInterval(async () => {
-      if (!hiddenVideoRef.current || isSamplingRef.current) return
+      const videoToSample =
+        activeVideoRef.current && activeVideoRef.current.readyState >= 2
+          ? activeVideoRef.current
+          : hiddenVideoRef.current
+
+      if (!videoToSample || isSamplingRef.current) return
       isSamplingRef.current = true
 
       try {
-        const result = await detectFaceInVideo(hiddenVideoRef.current)
+        const result = await detectFaceInVideo(videoToSample)
 
         if (result.faceDetected) {
           missingStartTimeRef.current = null
@@ -612,10 +648,12 @@ export default function PramaanApp() {
             const restoredEvent: TimelineEvent = {
               time: new Date().toLocaleTimeString([], { minute: '2-digit', second: '2-digit' }),
               title: 'Visual evidence restored',
-              description: 'Face visible again in camera frame. Continuous biometric tracking resumed.',
+              description: 'Candidate face returned to the browser camera frame.',
               type: 'normal',
             }
-            setEvents((prev) => [restoredEvent, ...prev])
+            setEvents((prev) => [restoredEvent, ...prev.filter((e) => e.title !== 'Visual evidence restored')])
+
+            const derivedMotion = result.motionScore ?? 94
 
             setScenarioData((prev) => ({
               ...prev,
@@ -623,7 +661,7 @@ export default function PramaanApp() {
               status: 'Low Risk',
               confidence: 'High',
               scores: {
-                face: 94,
+                face: derivedMotion,
                 voice: 96,
                 challenge: 100,
                 stream: 92,
@@ -636,7 +674,7 @@ export default function PramaanApp() {
             if (backendConnected) {
               try {
                 await api.sessions.sendSignals('PRM-CX0104', {
-                  faceMotionScore: 94,
+                  faceMotionScore: derivedMotion,
                   lipSyncScore: 96,
                   challengeScore: 100,
                   streamQualityScore: 92,
@@ -646,7 +684,7 @@ export default function PramaanApp() {
                 await api.sessions.createEvent('PRM-CX0104', {
                   type: 'VERIFIED',
                   title: 'Visual evidence restored',
-                  description: 'Face visible again in camera feed. Continuous biometric tracking resumed.',
+                  description: 'Candidate face returned to the browser camera frame.',
                   severity: 'normal',
                 })
               } catch (e) {
@@ -656,15 +694,18 @@ export default function PramaanApp() {
           }
 
           setFaceState({
+            liveState: 'FACE_VISIBLE',
             isLiveActive: true,
             faceVisible: true,
-            confidence: result.confidence || 94,
+            confidence: result.confidence || 96,
+            motionScore: result.motionScore ?? 94,
             isCovered: false,
             isOutsideFrame: false,
             missingDurationMs: 0,
             detectorStatus: 'ready',
             detectorType: result.detectorType,
             box: result.box,
+            landmarks: result.landmarks,
           })
         } else {
           // Face NOT detected (covered or candidate outside frame)
@@ -673,27 +714,18 @@ export default function PramaanApp() {
           }
           const elapsed = Date.now() - missingStartTimeRef.current
 
-          if (elapsed >= 1000 && !wasMissingRef.current) {
-            // Continuous missing for > 1 second -> FACE MISSING!
+          if (elapsed >= 1500 && !wasMissingRef.current) {
+            // Continuous missing for > 1.5 seconds -> FACE MISSING!
             wasMissingRef.current = true
-            notify(result.isCovered ? 'Camera covered — visual evidence unavailable' : 'Face no longer visible')
+            notify('Face not visible')
 
-            const missingEvent1: TimelineEvent = {
+            const missingEvent: TimelineEvent = {
               time: new Date().toLocaleTimeString([], { minute: '2-digit', second: '2-digit' }),
               title: 'Face no longer visible',
-              description: result.isCovered
-                ? 'Camera lens is obscured or covered. No facial landmarks detected.'
-                : 'Candidate is no longer visible inside the camera frame.',
+              description: 'Visual evidence temporarily unavailable. Additional review may be required.',
               type: 'warning',
             }
-            const missingEvent2: TimelineEvent = {
-              time: new Date().toLocaleTimeString([], { minute: '2-digit', second: '2-digit' }),
-              title: 'Visual evidence temporarily unavailable',
-              description:
-                'Biometric stream has insufficient visual evidence. Confidence reduced to Low without presuming fraud.',
-              type: 'warning',
-            }
-            setEvents((prev) => [missingEvent1, missingEvent2, ...prev])
+            setEvents((prev) => [missingEvent, ...prev.filter((e) => e.title !== 'Face no longer visible')])
 
             setScenarioData((prev) => ({
               ...prev,
@@ -706,7 +738,7 @@ export default function PramaanApp() {
               },
               quality: 'Degraded',
               explanation:
-                'Poor video quality lowers confidence. It does not prove dishonesty. Visual evidence is limited because of stream quality.',
+                'Visual evidence is temporarily unavailable. This does not prove dishonesty.',
             }))
 
             if (backendConnected) {
@@ -715,16 +747,14 @@ export default function PramaanApp() {
                   faceMotionScore: null,
                   lipSyncScore: null,
                   challengeScore: null,
-                  streamQualityScore: 92,
+                  streamQualityScore: 24,
                   visualEvidenceAvailable: false,
                   audioEvidenceAvailable: true,
                 })
                 await api.sessions.createEvent('PRM-CX0104', {
                   type: 'WARNING',
                   title: 'Face no longer visible',
-                  description: result.isCovered
-                    ? 'Camera lens is obscured or covered. Visual evidence temporarily unavailable.'
-                    : 'Candidate is no longer visible inside the camera frame. Visual evidence temporarily unavailable.',
+                  description: 'Visual evidence temporarily unavailable. Additional review may be required.',
                   severity: 'warning',
                 })
               } catch (e) {
@@ -735,9 +765,11 @@ export default function PramaanApp() {
 
           setFaceState((prev) => ({
             ...prev,
+            liveState: elapsed >= 1500 ? 'FACE_NOT_VISIBLE' : prev.liveState,
             isLiveActive: true,
-            faceVisible: elapsed < 1000 ? prev.faceVisible : false,
-            confidence: elapsed < 1000 ? prev.confidence : 0,
+            faceVisible: elapsed >= 1500 ? false : prev.faceVisible,
+            confidence: elapsed >= 1500 ? 0 : prev.confidence,
+            motionScore: elapsed >= 1500 ? null : prev.motionScore,
             isCovered: result.isCovered,
             isOutsideFrame: result.isOutsideFrame,
             missingDurationMs: elapsed,
@@ -992,6 +1024,9 @@ export default function PramaanApp() {
               cameraError={cameraError}
               isLowQualityMode={isLowQualityMode}
               faceState={faceState}
+              onRegisterVideo={(el) => {
+                activeVideoRef.current = el
+              }}
               onStartCamera={handleStartCamera}
               onStopCamera={handleStopCamera}
               onToggleLowQuality={setIsLowQualityMode}
@@ -1020,6 +1055,9 @@ export default function PramaanApp() {
               cameraError={cameraError}
               isLowQualityMode={isLowQualityMode}
               faceState={faceState}
+              onRegisterVideo={(el) => {
+                activeVideoRef.current = el
+              }}
               onStartCamera={handleStartCamera}
               onStopCamera={handleStopCamera}
               onToggleLowQuality={setIsLowQualityMode}
@@ -1066,7 +1104,7 @@ export default function PramaanApp() {
         onClose={() => setShowSummaryModal(false)}
       />
 
-      {/* Offscreen Hidden Video Element for Local Face Detection Sampling */}
+      {/* Offscreen Video Element for Local Face Detection Sampling */}
       <video
         ref={hiddenVideoRef}
         autoPlay
@@ -1075,12 +1113,13 @@ export default function PramaanApp() {
         aria-hidden="true"
         style={{
           position: 'fixed',
-          top: -9999,
-          left: -9999,
+          top: 0,
+          left: 0,
           width: 320,
           height: 240,
-          opacity: 0,
+          opacity: 0.001,
           pointerEvents: 'none',
+          zIndex: -1,
         }}
       />
     </div>

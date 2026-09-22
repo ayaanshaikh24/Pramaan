@@ -1,5 +1,3 @@
-'use client'
-
 import React, { useRef, useEffect, useState } from 'react'
 import {
   Video,
@@ -17,6 +15,8 @@ import {
 import { ScenarioData, TimelineEvent, Scenario, EventType, FacePresenceState } from '@/types/pramaan'
 import { CANDIDATE_DETAILS } from '@/lib/scenarios'
 import { ChallengeBanner } from '@/components/ChallengeBanner'
+import { useAudioMeter } from '@/lib/useAudioMeter'
+import { getRealStreamInfo } from '@/lib/streamInfo'
 
 function useAnimatedNumber(target: number, durationMs: number = 400): number {
   const [display, setDisplay] = useState(target)
@@ -57,6 +57,7 @@ interface LiveSessionViewProps {
   onToggleLowQuality: (val: boolean) => void
   onRequestVerification: () => void
   onGoToLab: () => void
+  onRegisterVideo?: (el: HTMLVideoElement | null) => void
   isChallengeBannerOpen?: boolean
   challengeStatus?: 'waiting' | 'recorded' | 'passed'
   challengePrompt?: string
@@ -79,6 +80,7 @@ export function LiveSessionView({
   onToggleLowQuality,
   onRequestVerification,
   onGoToLab,
+  onRegisterVideo,
   isChallengeBannerOpen = false,
   challengeStatus = 'waiting',
   challengePrompt = 'Turn your head slightly to the right and say BLUE 47',
@@ -88,18 +90,20 @@ export function LiveSessionView({
   onDismissChallenge,
 }: LiveSessionViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const { isMicAvailable, waveformHeights } = useAudioMeter(stream)
+  const streamInfo = getRealStreamInfo(stream)
 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream
       videoRef.current.play().catch(() => {})
     }
-  }, [stream])
+    if (onRegisterVideo) {
+      onRegisterVideo(videoRef.current)
+    }
+  }, [stream, onRegisterVideo])
 
   const isPoor = isLowQualityMode || data.quality === 'Poor'
-
-  // Dynamic waveform simulation heights
-  const waveformHeights = [6, 12, 18, 9, 22, 15, 8, 19, 11, 24, 14, 7, 16, 10, 20, 12]
 
   const getStatusColor = (status: string) => {
     if (status === 'Low Risk') return 'var(--verified-green)'
@@ -178,14 +182,36 @@ export function LiveSessionView({
             <div className="paper-card-header">
               <span className="paper-section-title">Candidate video stream</span>
               {stream ? (
-                <span className="text-[11px] text-[var(--verified-green)] flex items-center gap-1.5 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--verified-green)]" />
-                  Browser camera feed connected
-                </span>
+                faceState?.liveState === 'FACE_VISIBLE' ? (
+                  <span className="text-[11px] text-[var(--verified-green)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--verified-green)]" />
+                    Face visible · Browser sensor active
+                  </span>
+                ) : faceState?.liveState === 'FACE_NOT_VISIBLE' ? (
+                  <span className="text-[11px] text-[var(--review-amber)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--review-amber)] animate-pulse" />
+                    Face not visible
+                  </span>
+                ) : faceState?.liveState === 'CAMERA_PERMISSION_DENIED' ? (
+                  <span className="text-[11px] text-[var(--concern-coral)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--concern-coral)]" />
+                    Camera permission denied
+                  </span>
+                ) : faceState?.liveState === 'DETECTOR_UNAVAILABLE' ? (
+                  <span className="text-[11px] text-[var(--concern-coral)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--concern-coral)]" />
+                    Detector unavailable
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[var(--cobalt)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--cobalt)] animate-pulse" />
+                    Detector loading
+                  </span>
+                )
               ) : (
                 <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-strong)]" />
-                  Demo signal layer active
+                  Demo scenario active
                 </span>
               )}
             </div>
@@ -215,7 +241,24 @@ export function LiveSessionView({
                   </div>
                 )}
 
-                {/* Minimal Face Framing Brackets (hidden when face is missing) */}
+                {/* Face Overlay (Bounding Box ONLY when landmarks actually detected) */}
+                {stream && faceState?.faceVisible && faceState.box && (
+                  <div
+                    className="face-detected-bounding-box"
+                    style={{
+                      left: `${faceState.box.x}%`,
+                      top: `${faceState.box.y}%`,
+                      width: `${faceState.box.width}%`,
+                      height: `${faceState.box.height}%`,
+                    }}
+                  >
+                    <div className="face-box-label">
+                      Face visible · {faceState.confidence}%
+                    </div>
+                  </div>
+                )}
+
+                {/* Minimal Framing Brackets */}
                 {(!stream || faceState?.faceVisible) && (
                   <div className="framing-brackets">
                     <div className="frame-corner tl" />
@@ -226,18 +269,18 @@ export function LiveSessionView({
                 )}
 
                 {/* Face Missing / Covered Alert Overlay */}
-                {stream && !faceState?.faceVisible && (
+                {stream && faceState?.liveState === 'FACE_NOT_VISIBLE' && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4 z-10">
-                    <div className="bg-[rgba(15,20,30,0.88)] border border-[var(--concern-coral)] text-white px-3 py-2 rounded-[6px] text-xs flex items-center gap-2.5 shadow-xl backdrop-blur-xs">
-                      <span className="w-2 h-2 rounded-full bg-[var(--concern-coral)] animate-pulse" />
+                    <div className="bg-[rgba(15,20,30,0.92)] border border-[var(--review-amber)] text-white px-3.5 py-2.5 rounded-[6px] text-xs flex items-center gap-2.5 shadow-xl backdrop-blur-xs">
+                      <span className="w-2 h-2 rounded-full bg-[var(--review-amber)] animate-pulse" />
                       <div className="flex flex-col">
-                        <span className="font-semibold text-[var(--concern-coral)]">
-                          {faceState?.isCovered ? 'Camera Lens Covered / Obscured' : 'Face Not Visible'}
+                        <span className="font-semibold text-[var(--review-amber)]">
+                          {faceState?.isCovered ? 'Camera Lens Obscured / Covered' : 'Face not visible'}
                         </span>
                         <span className="text-[11px] text-[#C0C4C1]">
                           {faceState?.isCovered
-                            ? 'No biometric landmarks detectable'
-                            : 'Candidate moved outside camera frame'}
+                            ? 'Visual evidence temporarily unavailable'
+                            : 'Candidate face moved outside camera frame'}
                         </span>
                       </div>
                     </div>
@@ -252,37 +295,45 @@ export function LiveSessionView({
 
                 {/* Video Telemetry Strip */}
                 <div className="video-telemetry-strip font-mono">
-                  <span>{isPoor ? '480p · 15 FPS' : '1080p · 30 FPS'}</span>
-                  <span className="text-[var(--verified-green)]">Demo signal layer active</span>
+                  <span>{stream ? `${streamInfo.resolution} · ${streamInfo.fps}` : (isPoor ? '480p · 15 FPS' : '1080p · 30 FPS')}</span>
+                  <span className={faceState?.isLiveActive ? 'text-[var(--verified-green)]' : 'text-[var(--text-muted)]'}>
+                    {faceState?.isLiveActive ? 'Browser sensor active' : 'Demo scenario active'}
+                  </span>
                 </div>
               </div>
 
               {/* Honest Camera Disclaimer */}
               <div className="text-[10px] text-[var(--text-muted)] italic leading-tight px-1">
-                Camera preview is live. Integrity scores are controlled through Demo Lab for this prototype.
+                {faceState?.isLiveActive
+                  ? 'Browser sensor active: Biometric presence processed locally on-device. Zero raw video uploaded.'
+                  : 'Camera preview is live. Integrity scores are controlled through Demo Lab for this prototype.'}
               </div>
 
             {/* Hardware Status Records */}
             <div className="meta-record-card">
               <div className="meta-record-row">
                 <div className="flex items-center gap-1.5">
-                  <Mic size={13} className="text-[var(--verified-green)]" />
+                  <Mic size={13} className={isMicAvailable ? 'text-[var(--verified-green)]' : 'text-[var(--text-muted)]'} />
                   <span>Microphone status:</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-[var(--ink-black)]">Microphone ready</span>
-                  <div className="audio-waveform-bars">
-                    {waveformHeights.map((h, i) => (
-                      <span
-                        key={i}
-                        className="audio-bar-tick"
-                        style={{
-                          height: `${isPoor ? Math.max(3, h * 0.4) : h}px`,
-                          opacity: isPoor ? 0.6 : 1,
-                        }}
-                      />
-                    ))}
-                  </div>
+                  <span className="font-medium text-[var(--ink-black)]">
+                    {isMicAvailable ? 'Microphone ready' : 'Microphone unavailable'}
+                  </span>
+                  {isMicAvailable && (
+                    <div className="audio-waveform-bars">
+                      {waveformHeights.map((h, i) => (
+                        <span
+                          key={i}
+                          className="audio-bar-tick"
+                          style={{
+                            height: `${isPoor ? Math.max(3, h * 0.4) : h}px`,
+                            opacity: isPoor ? 0.6 : 1,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -292,7 +343,7 @@ export function LiveSessionView({
                   <span>Stream context:</span>
                 </div>
                 <span className="font-mono text-[var(--ink-black)]">
-                  {isPoor ? 'Degraded (420 kbps)' : 'Optimal (3,200 kbps)'}
+                  {stream ? streamInfo.bandwidth : (isPoor ? 'Degraded (420 kbps)' : 'Optimal (3,200 kbps)')}
                 </span>
               </div>
 
@@ -368,7 +419,7 @@ export function LiveSessionView({
             <div className="flex items-center gap-2">
               <span className="paper-section-title">Integrity signal</span>
               <span className={`scenario-badge ${currentScenario}`}>
-                DEMO SCENARIO: {currentScenario === 'low-bandwidth' ? 'LOW BANDWIDTH' : currentScenario.toUpperCase()}
+                {faceState?.isLiveActive ? 'BROWSER SENSOR' : `DEMO SCENARIO: ${currentScenario === 'low-bandwidth' ? 'LOW BANDWIDTH' : currentScenario.toUpperCase()}`}
               </span>
             </div>
             <span className="text-xs font-mono text-[var(--text-muted)]">
@@ -442,7 +493,7 @@ export function LiveSessionView({
           <div className="flex items-center justify-between mb-1">
             <span className="paper-section-title">Signal analysis</span>
             <span className="text-[11px] text-[var(--text-muted)] font-mono">
-              {faceState?.isLiveActive ? 'Browser signal' : 'Demo signal'}
+              {faceState?.isLiveActive ? 'Browser sensor' : 'Demo scenario'}
             </span>
           </div>
 
@@ -460,33 +511,30 @@ export function LiveSessionView({
                     border: '1px solid var(--border-hairline)',
                   }}
                 >
-                  {faceState?.isLiveActive ? 'Browser signal' : 'Demo signal'}
+                  {faceState?.isLiveActive ? 'Browser sensor' : 'Demo scenario'}
                 </span>
               </strong>
               <span
                 className="signal-score-badge font-mono"
                 style={{ color: getSignalColor(data.scores.face) }}
               >
-                {data.scores.face === null ? 'Low confidence' : `${data.scores.face} / 100`}
+                {data.scores.face === null ? 'NOT AVAILABLE' : `${data.scores.face} / 100`}
               </span>
             </div>
             <div className="flat-signal-bar">
               <div
                 className="flat-signal-progress"
                 style={{
-                  width: `${data.scores.face ?? 20}%`,
-                  background: getSignalColor(data.scores.face),
+                  width: `${data.scores.face ?? 0}%`,
+                  background: data.scores.face === null ? 'var(--review-amber)' : getSignalColor(data.scores.face),
+                  opacity: data.scores.face === null ? 0.35 : 1,
                 }}
               />
             </div>
             <div className="signal-explainer-subtext">
-              {stream && !faceState?.faceVisible
-                ? faceState?.isCovered
-                  ? 'Camera covered · Visual evidence temporarily unavailable'
-                  : 'Face not visible in frame · Visual evidence temporarily unavailable'
-                : data.scores.face === null
+              {data.scores.face === null
                 ? 'Visual evidence temporarily unavailable'
-                : data.scores.face > 70
+                : (data.scores.face ?? 0) > 70
                 ? 'Natural motion is consistent'
                 : 'Reduced natural motion'}
             </div>

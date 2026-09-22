@@ -26,7 +26,9 @@ export function calculateRiskScore(signals: SignalInputs): ScoringResult {
     const riskStatus: RiskStatus = 'INSUFFICIENT_EVIDENCE'
     const confidence: ConfidenceLevel = 'LOW'
     const explanation =
-      'Poor video quality lowers confidence. It does not prove dishonesty. Visual evidence is limited because of stream quality.'
+      stream < 45 && visualAvailable && face !== null
+        ? 'Poor video quality lowers confidence. It does not prove dishonesty. Visual evidence is limited because of stream quality.'
+        : 'Visual evidence is temporarily unavailable. This does not prove dishonesty. Poor video quality lowers confidence.'
 
     return { riskScore, riskStatus, confidence, explanation }
   }

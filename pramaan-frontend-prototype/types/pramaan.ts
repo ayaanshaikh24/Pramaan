@@ -45,14 +45,26 @@ export interface CandidateInfo {
   duration: string
 }
 
+export type LiveFaceState =
+  | 'FACE_VISIBLE'
+  | 'FACE_NOT_VISIBLE'
+  | 'CAMERA_PERMISSION_DENIED'
+  | 'DETECTOR_LOADING'
+  | 'DETECTOR_UNAVAILABLE'
+
 export interface FacePresenceState {
+  liveState: LiveFaceState
   isLiveActive: boolean
   faceVisible: boolean
   confidence: number
+  motionScore: number | null
   isCovered: boolean
   isOutsideFrame: boolean
   missingDurationMs: number
   detectorStatus: 'loading' | 'ready' | 'unavailable'
-  detectorType: 'mediapipe' | 'native' | 'canvas' | 'none'
+  detectorType: 'mediapipe' | 'native' | 'none'
   box?: { x: number; y: number; width: number; height: number }
+  landmarks?: Array<{ x: number; y: number; z: number }>
+  wasRestored?: boolean
 }
+

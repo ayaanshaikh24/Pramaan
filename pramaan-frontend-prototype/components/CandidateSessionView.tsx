@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import { ScenarioData, ChallengeStatus, FacePresenceState } from '@/types/pramaan'
 import { CANDIDATE_DETAILS, SAMPLE_CHALLENGES } from '@/lib/scenarios'
+import { useAudioMeter } from '@/lib/useAudioMeter'
+import { getRealStreamInfo } from '@/lib/streamInfo'
 
 interface CandidateSessionViewProps {
   data: ScenarioData
@@ -24,6 +26,7 @@ interface CandidateSessionViewProps {
   cameraError: string | null
   isLowQualityMode: boolean
   faceState?: FacePresenceState
+  onRegisterVideo?: (el: HTMLVideoElement | null) => void
   onStartCamera: () => void
   onStopCamera: () => void
   onToggleLowQuality: (val: boolean) => void
@@ -39,6 +42,7 @@ export function CandidateSessionView({
   cameraError,
   isLowQualityMode,
   faceState,
+  onRegisterVideo,
   onStartCamera,
   onStopCamera,
   onToggleLowQuality,
@@ -46,6 +50,8 @@ export function CandidateSessionView({
   onStartIntegrityCheck,
 }: CandidateSessionViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const { isMicAvailable, waveformHeights } = useAudioMeter(stream)
+  const streamInfo = getRealStreamInfo(stream)
   const [challengeIdx, setChallengeIdx] = useState(0)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
   const [timeLeft, setTimeLeft] = useState(20)
@@ -61,7 +67,10 @@ export function CandidateSessionView({
       videoRef.current.srcObject = stream
       videoRef.current.play().catch(() => {})
     }
-  }, [stream])
+    if (onRegisterVideo) {
+      onRegisterVideo(videoRef.current)
+    }
+  }, [stream, onRegisterVideo])
 
   // Countdown timer logic
   useEffect(() => {
@@ -104,9 +113,6 @@ export function CandidateSessionView({
   const currentPrompt = SAMPLE_CHALLENGES[challengeIdx]
   const isPoor = isLowQualityMode || data.quality === 'Poor'
 
-  // Dynamic waveform heights
-  const waveformHeights = [6, 12, 18, 9, 22, 15, 8, 19, 11, 24, 14, 7, 16, 10, 20, 12]
-
   return (
     <div className="flex flex-col gap-4 max-w-5xl mx-auto">
       {/* Session Candidate Header Card */}
@@ -148,10 +154,32 @@ export function CandidateSessionView({
             <div className="paper-card-header">
               <span className="paper-section-title">Candidate room feed</span>
               {stream ? (
-                <span className="text-[11px] text-[var(--verified-green)] flex items-center gap-1.5 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--verified-green)]" />
-                  Browser camera feed connected
-                </span>
+                faceState?.liveState === 'FACE_VISIBLE' ? (
+                  <span className="text-[11px] text-[var(--verified-green)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--verified-green)]" />
+                    Face visible · Browser sensor active
+                  </span>
+                ) : faceState?.liveState === 'FACE_NOT_VISIBLE' ? (
+                  <span className="text-[11px] text-[var(--review-amber)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--review-amber)] animate-pulse" />
+                    Face not visible
+                  </span>
+                ) : faceState?.liveState === 'CAMERA_PERMISSION_DENIED' ? (
+                  <span className="text-[11px] text-[var(--concern-coral)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--concern-coral)]" />
+                    Camera permission denied
+                  </span>
+                ) : faceState?.liveState === 'DETECTOR_UNAVAILABLE' ? (
+                  <span className="text-[11px] text-[var(--concern-coral)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--concern-coral)]" />
+                    Detector unavailable
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[var(--cobalt)] flex items-center gap-1.5 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--cobalt)] animate-pulse" />
+                    Detector loading
+                  </span>
+                )
               ) : (
                 <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-strong)]" />
@@ -178,8 +206,25 @@ export function CandidateSessionView({
                     </div>
                     <div className="text-[11px] text-[#A6AAA7] max-w-[240px]">
                       {cameraError
-                        ? 'Simulated video active with local presence signal mock.'
+                        ? 'Camera unavailable. Deterministic session signals active.'
                         : 'Click "Start camera" to connect your real webcam.'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Face Overlay (Bounding Box ONLY when landmarks actually detected) */}
+                {stream && faceState?.faceVisible && faceState.box && (
+                  <div
+                    className="face-detected-bounding-box"
+                    style={{
+                      left: `${faceState.box.x}%`,
+                      top: `${faceState.box.y}%`,
+                      width: `${faceState.box.width}%`,
+                      height: `${faceState.box.height}%`,
+                    }}
+                  >
+                    <div className="face-box-label">
+                      Face visible · {faceState.confidence}%
                     </div>
                   </div>
                 )}
@@ -195,18 +240,18 @@ export function CandidateSessionView({
                 )}
 
                 {/* Face Missing / Covered Alert Overlay */}
-                {stream && !faceState?.faceVisible && (
+                {stream && faceState?.liveState === 'FACE_NOT_VISIBLE' && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-4 z-10">
-                    <div className="bg-[rgba(15,20,30,0.88)] border border-[var(--concern-coral)] text-white px-3 py-2 rounded-[6px] text-xs flex items-center gap-2.5 shadow-xl backdrop-blur-xs">
-                      <span className="w-2 h-2 rounded-full bg-[var(--concern-coral)] animate-pulse" />
+                    <div className="bg-[rgba(15,20,30,0.92)] border border-[var(--review-amber)] text-white px-3.5 py-2.5 rounded-[6px] text-xs flex items-center gap-2.5 shadow-xl backdrop-blur-xs">
+                      <span className="w-2 h-2 rounded-full bg-[var(--review-amber)] animate-pulse" />
                       <div className="flex flex-col">
-                        <span className="font-semibold text-[var(--concern-coral)]">
-                          {faceState?.isCovered ? 'Camera Lens Obscured' : 'Face Not In Frame'}
+                        <span className="font-semibold text-[var(--review-amber)]">
+                          {faceState?.isCovered ? 'Camera Lens Obscured / Covered' : 'Face not visible'}
                         </span>
                         <span className="text-[11px] text-[#C0C4C1]">
                           {faceState?.isCovered
                             ? 'Please uncover your camera to verify attendance'
-                            : 'Please remain centered in front of the camera'}
+                            : 'Candidate face moved outside camera frame'}
                         </span>
                       </div>
                     </div>
@@ -215,43 +260,54 @@ export function CandidateSessionView({
 
                 {/* Bottom telemetry */}
                 <div className="video-telemetry-strip font-mono">
-                  <span>{isPoor ? '480p · 15 FPS' : '1080p · 30 FPS'}</span>
-                  <span className="text-[var(--verified-green)]">Demo signal layer active</span>
+                  <span>{stream ? `${streamInfo.resolution} · ${streamInfo.fps}` : (isPoor ? '480p · 15 FPS' : '1080p · 30 FPS')}</span>
+                  <span className={faceState?.isLiveActive ? 'text-[var(--verified-green)]' : 'text-[var(--text-muted)]'}>
+                    {faceState?.isLiveActive ? 'Browser sensor active' : 'Demo signal mode'}
+                  </span>
                 </div>
               </div>
 
               {/* Honest Camera Disclaimer */}
               <div className="text-[10px] text-[var(--text-muted)] italic leading-tight px-1 mt-1.5">
-                Camera preview is live. Integrity scores are controlled through Demo Lab for this prototype.
+                {faceState?.isLiveActive
+                  ? 'Browser sensor active: Biometric presence processed locally on-device. Zero raw video uploaded.'
+                  : 'Camera preview is live. Integrity scores are controlled through Demo Lab for this prototype.'}
               </div>
 
               {/* Hardware Status Records */}
               <div className="meta-record-card mt-3">
                 <div className="meta-record-row">
                   <div className="flex items-center gap-1.5">
-                    <Mic size={13} className="text-[var(--verified-green)]" />
+                    <Mic size={13} className={isMicAvailable ? 'text-[var(--verified-green)]' : 'text-[var(--text-muted)]'} />
                     <span>Microphone status:</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-[var(--ink-black)]">Microphone ready</span>
-                    <div className="audio-waveform-bars">
-                      {waveformHeights.map((h, i) => (
-                        <span
-                          key={i}
-                          className="audio-bar-tick"
-                          style={{
-                            height: `${isPoor ? Math.max(3, h * 0.4) : h}px`,
-                          }}
-                        />
-                      ))}
-                    </div>
+                    <span className="font-medium text-[var(--ink-black)]">
+                      {isMicAvailable ? 'Microphone ready' : 'Microphone unavailable'}
+                    </span>
+                    {isMicAvailable && (
+                      <div className="audio-waveform-bars">
+                        {waveformHeights.map((h, i) => (
+                          <span
+                            key={i}
+                            className="audio-bar-tick"
+                            style={{
+                              height: `${isPoor ? Math.max(3, h * 0.4) : h}px`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="meta-record-row">
-                  <span>Stream bitrate:</span>
+                  <div className="flex items-center gap-1.5">
+                    <Wifi size={13} className={isPoor ? 'text-[var(--review-amber)]' : 'text-[var(--cobalt)]'} />
+                    <span>Stream context:</span>
+                  </div>
                   <span className="font-mono text-[var(--ink-black)]">
-                    {isPoor ? '420 kbps' : '3,100 kbps'}
+                    {stream ? streamInfo.bandwidth : (isPoor ? 'Degraded (420 kbps)' : 'Optimal (3,100 kbps)')}
                   </span>
                 </div>
               </div>
