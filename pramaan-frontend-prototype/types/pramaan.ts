@@ -1,17 +1,5 @@
 export type Scenario = 'normal' | 'proxy' | 'low-bandwidth'
 
-export type SessionState =
-  | 'PRECHECK'
-  | 'CAMERA_REQUESTED'
-  | 'MONITORING'
-  | 'CHALLENGE_ISSUED'
-  | 'WAITING_FOR_RESPONSE'
-  | 'CHALLENGE_PASSED'
-  | 'CHALLENGE_PARTIAL'
-  | 'CHALLENGE_FAILED'
-  | 'EVIDENCE_UNAVAILABLE'
-  | 'ENDED'
-
 export type IntegrityStatus =
   | 'Not evaluated'
   | 'Low Risk'
@@ -24,7 +12,6 @@ export type ChallengeStatus = 'pending' | 'waiting_for_response' | 'passed' | 'p
 export type EventType = 'normal' | 'warning' | 'critical' | 'info'
 
 export interface TimelineEvent {
-  id?: string
   time: string
   title: string
   description: string
@@ -36,26 +23,6 @@ export interface SignalScores {
   voice: number | null
   challenge: number | null
   stream: number | null
-}
-
-export interface ScenarioData {
-  name: string
-  risk: number | null
-  status: IntegrityStatus
-  confidence: 'High' | 'Medium' | 'Low' | 'Not available'
-  scores: SignalScores
-  quality: 'Good' | 'Poor' | 'Degraded' | 'Not available'
-  challenge: ChallengeStatus
-  explanation: string
-  events: TimelineEvent[]
-}
-
-export interface CandidateInfo {
-  id: string
-  name: string
-  role: string
-  stage: string
-  duration: string
 }
 
 export type LiveFaceState =
@@ -79,20 +46,4 @@ export interface FacePresenceState {
   detectorType: 'mediapipe' | 'native' | 'none'
   box?: { x: number; y: number; width: number; height: number }
   landmarks?: Array<{ x: number; y: number; z: number }>
-  wasRestored?: boolean
-}
-
-export interface SessionMode {
-  mode: 'LIVE' | 'DEMO'
-  demoScenario?: Scenario
-}
-
-export interface MicrophoneState {
-  status: 'NOT_STARTED' | 'ACTIVE' | 'UNAVAILABLE'
-  level: number
-}
-
-export interface CameraState {
-  status: 'NOT_STARTED' | 'ACTIVE' | 'STOPPED' | 'PERMISSION_DENIED'
-  stream: MediaStream | null
 }

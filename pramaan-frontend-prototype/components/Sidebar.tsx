@@ -1,70 +1,51 @@
 'use client'
 
 import React from 'react'
-import {
-  Activity,
-  Clock,
-  FlaskConical,
-  ShieldCheck,
-  FileCheck2,
-} from 'lucide-react'
-
-export type ActiveView = 'live' | 'evidence' | 'lab' | 'privacy'
+import { Video, Shield } from 'lucide-react'
 
 interface SidebarProps {
-  currentView: ActiveView
-  onViewChange: (view: ActiveView) => void
+  onScenarioChange?: (scenario: string) => void
+  currentScenario?: string
 }
 
-export function Sidebar({ currentView, onViewChange }: SidebarProps) {
-  const navItems = [
-    { id: 'live' as const, label: 'Live Interview Room', icon: Activity },
-    { id: 'evidence' as const, label: 'Evidence Timeline', icon: Clock },
-    { id: 'lab' as const, label: 'Demo Lab', icon: FlaskConical },
-    { id: 'privacy' as const, label: 'Privacy Controls', icon: ShieldCheck },
-  ]
-
+export function Sidebar({ onScenarioChange, currentScenario = 'normal' }: SidebarProps) {
   return (
-    <aside className="navy-sidebar">
-      <div className="sidebar-brand-block">
-        <div className="evidence-seal">
-          <FileCheck2 size={16} />
-        </div>
-        <div>
-          <div className="brand-label">PRAMAAN</div>
-          <div className="brand-subtext">The Evidence Room</div>
+    <aside className="institutional-sidebar">
+      <div className="sidebar-header-group">
+        <div className="flex items-center gap-2">
+          <div className="logo-mark">P</div>
+          <div>
+            <div className="text-sm font-bold tracking-tight text-[var(--ink-black)]">PRAMAAN</div>
+            <div className="text-[10px] font-medium text-[var(--cobalt)] uppercase tracking-wider">Interview Integrity Layer</div>
+          </div>
         </div>
       </div>
 
-      <nav className="navy-nav">
-        {navItems.map((item) => {
-          const Icon = item.icon
-          const isActive = currentView === item.id
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`nav-link-btn ${isActive ? 'active' : ''}`}
-              onClick={() => onViewChange(item.id)}
-            >
-              <Icon size={15} className={isActive ? 'nav-icon-active' : 'nav-icon-inactive'} />
-              <span>{item.label}</span>
-            </button>
-          )
-        })}
+      <div className="sidebar-section-label">Session</div>
+      <nav className="sidebar-nav-list">
+        <div className="sidebar-nav-item active">
+          <Video size={15} className="text-[var(--cobalt)]" />
+          <span>Live Interview Room</span>
+        </div>
       </nav>
 
-      <div className="navy-footer">
-        <div className="scenario-indicator-card">
-          <span className="status-dot-sm" style={{ background: '#198754' }} />
-          <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-wider font-semibold scenario-label-kicker">
-              Session mode
-            </span>
-            <span className="text-xs font-medium text-[#F1F5F9] truncate max-w-[140px]">
-              Live Interview
-            </span>
-          </div>
+      <div className="sidebar-section-label">Test Scenario</div>
+      <div className="px-3 py-2">
+        <select
+          className="w-full text-xs font-medium bg-[var(--surface-subtle)] border border-[var(--border-hairline)] rounded px-2 py-1.5 text-[var(--ink-black)]"
+          value={currentScenario}
+          onChange={(e) => onScenarioChange?.(e.target.value)}
+        >
+          <option value="normal">Normal</option>
+          <option value="proxy">Proxy</option>
+          <option value="low-bandwidth">Low Bandwidth</option>
+        </select>
+      </div>
+
+      <div className="sidebar-footer">
+        <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+          <Shield size={12} className="text-[var(--verified-green)]" />
+          <span>Zero raw biometric data leaves device</span>
         </div>
       </div>
     </aside>
