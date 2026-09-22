@@ -3,43 +3,26 @@
 import React from 'react'
 import {
   Activity,
-  User,
   Clock,
   FlaskConical,
   ShieldCheck,
   FileCheck2,
 } from 'lucide-react'
-import { Scenario } from '@/types/pramaan'
 
-export type ActiveView = 'live' | 'candidate' | 'evidence' | 'lab' | 'privacy'
+export type ActiveView = 'live' | 'evidence' | 'lab' | 'privacy'
 
 interface SidebarProps {
   currentView: ActiveView
   onViewChange: (view: ActiveView) => void
-  currentScenario: Scenario
 }
 
-export function Sidebar({ currentView, onViewChange, currentScenario }: SidebarProps) {
+export function Sidebar({ currentView, onViewChange }: SidebarProps) {
   const navItems = [
-    { id: 'live', label: 'Live Session', icon: Activity },
-    { id: 'candidate', label: 'Candidate View', icon: User },
-    { id: 'evidence', label: 'Evidence Timeline', icon: Clock },
-    { id: 'lab', label: 'Demo Lab', icon: FlaskConical },
-    { id: 'privacy', label: 'Privacy Controls', icon: ShieldCheck },
-  ] as const
-
-  const getScenarioBadge = () => {
-    switch (currentScenario) {
-      case 'normal':
-        return { label: 'Normal Session', color: '#198754' }
-      case 'proxy':
-        return { label: 'Simulated Proxy', color: '#D9534F' }
-      case 'low-bandwidth':
-        return { label: 'Low Bandwidth', color: '#D98B21' }
-    }
-  }
-
-  const scenarioMeta = getScenarioBadge()
+    { id: 'live' as const, label: 'Live Interview Room', icon: Activity },
+    { id: 'evidence' as const, label: 'Evidence Timeline', icon: Clock },
+    { id: 'lab' as const, label: 'Demo Lab', icon: FlaskConical },
+    { id: 'privacy' as const, label: 'Privacy Controls', icon: ShieldCheck },
+  ]
 
   return (
     <aside className="navy-sidebar">
@@ -73,16 +56,13 @@ export function Sidebar({ currentView, onViewChange, currentScenario }: SidebarP
 
       <div className="navy-footer">
         <div className="scenario-indicator-card">
-          <span
-            className="status-dot-sm"
-            style={{ background: scenarioMeta.color }}
-          />
+          <span className="status-dot-sm" style={{ background: '#198754' }} />
           <div className="flex flex-col">
             <span className="text-[9px] uppercase tracking-wider font-semibold scenario-label-kicker">
-              Active scenario
+              Session mode
             </span>
             <span className="text-xs font-medium text-[#F1F5F9] truncate max-w-[140px]">
-              {scenarioMeta.label}
+              Live Interview
             </span>
           </div>
         </div>

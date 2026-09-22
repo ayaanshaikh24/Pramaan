@@ -52,6 +52,9 @@ export function SharedSessionRoom({
 }: SharedSessionRoomProps) {
   const { contract, update, addTimelineEvent, setChallengeStatus, setFaceState, setScores, setRisk } = useSessionState(sessionId)
 
+  type ViewMode = 'split' | 'candidate' | 'recruiter'
+  const [viewMode, setViewMode] = useState<ViewMode>('split')
+
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const notify = useCallback((msg: string) => {
     setToastMessage(msg)
@@ -438,9 +441,29 @@ export function SharedSessionRoom({
           <span>{toastMessage}</span>
         </div>
       )}
-      <div className="shared-session-grid">
+
+      {/* View Mode Toggle */}
+      <div className="flex items-center gap-1 p-1 bg-[var(--surface-subtle)] rounded-lg border border-[var(--border-hairline)] w-fit">
+        {(['split', 'candidate', 'recruiter'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              viewMode === mode
+                ? 'bg-white text-[var(--ink-black)] shadow-sm border border-[var(--border-hairline)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--ink-black)]'
+            }`}
+            onClick={() => setViewMode(mode)}
+          >
+            {mode === 'split' ? 'Split View' : mode === 'candidate' ? 'Candidate View' : 'Recruiter View'}
+          </button>
+        ))}
+      </div>
+
+      <div className={viewMode === 'split' ? 'shared-session-grid' : 'flex flex-col gap-3'}>
         {/* LEFT PANEL: CANDIDATE */}
-        <div className="flex flex-col gap-3">
+        {(viewMode === 'split' || viewMode === 'candidate') && (
+          <div className="flex flex-col gap-3">
           {/* Camera & Face Card */}
           <div className="paper-card">
             <div className="paper-card-header">
@@ -559,9 +582,11 @@ export function SharedSessionRoom({
             )}
           </div>
         </div>
+        )}
 
         {/* RIGHT PANEL: RECRUITER */}
-        <div className="flex flex-col gap-3">
+        {(viewMode === 'split' || viewMode === 'recruiter') && (
+          <div className="flex flex-col gap-3">
           <div className="paper-card confidence-spectrum-box">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -645,6 +670,7 @@ export function SharedSessionRoom({
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   )
