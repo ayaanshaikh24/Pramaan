@@ -1,5 +1,29 @@
 import { Scenario, ScenarioData } from '@/types/pramaan'
 
+export const DEFAULT_LIVE_SESSION_DATA: ScenarioData = {
+  name: 'Live Session',
+  risk: null,
+  status: 'Not evaluated',
+  confidence: 'Not available',
+  quality: 'Not available',
+  challenge: 'pending',
+  explanation: 'Waiting for browser camera and microphone sensor signals to begin biometric integrity evaluation.',
+  scores: {
+    face: null,
+    voice: null,
+    challenge: null,
+    stream: null,
+  },
+  events: [
+    {
+      time: '00:00',
+      title: 'Waiting for browser signals',
+      description: 'Camera and microphone sensors not yet connected. Click "Start camera" to initialize biometric pipeline.',
+      type: 'info',
+    },
+  ],
+}
+
 export const scenarios: Record<Scenario, ScenarioData> = {
   normal: {
     name: 'Normal Candidate',

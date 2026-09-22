@@ -78,6 +78,8 @@ export async function initializeFaceDetector(): Promise<{
         },
         runningMode: 'VIDEO',
         numFaces: 1,
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
         minFaceDetectionConfidence: 0.5,
         minFacePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
@@ -91,6 +93,8 @@ export async function initializeFaceDetector(): Promise<{
         },
         runningMode: 'VIDEO',
         numFaces: 1,
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
         minFaceDetectionConfidence: 0.5,
         minFacePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
@@ -340,10 +344,24 @@ export async function detectFaceInVideo(
   }
 }
 
+export function destroyFaceDetector(): void {
+  if (faceLandmarkerInstance) {
+    try {
+      faceLandmarkerInstance.close?.()
+    } catch (e) {
+      console.warn('Error closing FaceLandmarker:', e)
+    }
+    faceLandmarkerInstance = null
+  }
+  isInitializing = false
+}
+
 if (typeof window !== 'undefined') {
   ;(window as any).__pramaanFaceDetector = {
     initializeFaceDetector,
     detectFaceInVideo,
+    destroyFaceDetector,
     getInstance: () => faceLandmarkerInstance,
   }
 }
+
