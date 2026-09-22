@@ -29,12 +29,13 @@ import {
   EventType,
 } from '@/types/pramaan'
 import { CANDIDATE_DETAILS, DEFAULT_LIVE_SESSION_DATA } from '@/lib/scenarios'
-import { useAudioMeter } from '@/lib/useAudioMeter'
-import { getRealStreamInfo } from '@/lib/streamInfo'
+import { useAudioMeter, deriveVoiceScore } from '@/lib/useAudioMeter'
+import { getRealStreamInfo, deriveStreamScore } from '@/lib/streamInfo'
 import {
   detectFaceInVideo,
   initializeFaceDetector,
   destroyFaceDetector,
+  FaceDetectionResult,
 } from '@/lib/faceDetector'
 import {
   BrowserSpeechSession,
@@ -100,9 +101,24 @@ export function SharedSessionRoom({
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Real Audio Meter
-  const { isMicAvailable, waveformHeights, statusText: micStatusText } =
+  const { isMicAvailable, audioLevel, waveformHeights, statusText: micStatusText } =
     useAudioMeter(stream)
   const streamInfo = getRealStreamInfo(stream)
+
+  // Keep the latest live audio level available to the detection loop without re-render churn.
+  const audioLevelRef = useRef<number>(audioLevel)
+  useEffect(() => {
+    audioLevelRef.current = audioLevel
+  }, [audioLevel])
+
+  const isMicAvailableRef = useRef<boolean>(isMicAvailable)
+  useEffect(() => {
+    isMicAvailableRef.current = isMicAvailable
+  }, [isMicAvailable])
+
+  // Real derived signal scores (browser sensor, never fabricated).
+  const voiceScore = deriveVoiceScore(isMicAvailable, audioLevel)
+  const streamScore = deriveStreamScore(stream)
 
   // Real Face Detection State
   const [faceState, setFaceState] = useState<FacePresenceState>({
@@ -121,6 +137,8 @@ export function SharedSessionRoom({
   const missingStartTimeRef = useRef<number | null>(null)
   const wasMissingRef = useRef<boolean>(false)
   const isSamplingRef = useRef<boolean>(false)
+  const faceVisibleRef = useRef<boolean>(false)
+  const lastSignalSentRef = useRef<number>(0)
 
   // Challenge & SpeechRecognition State
   const [challengePrompt, setChallengePrompt] = useState<string>(
@@ -134,6 +152,7 @@ export function SharedSessionRoom({
   const [speechActive, setSpeechActive] = useState<boolean>(false)
   const [hasSpeechSupport, setHasSpeechSupport] = useState<boolean>(true)
   const speechSessionRef = useRef<BrowserSpeechSession | null>(null)
+  const challengeScoreRef = useRef<number | null>(null)
 
   const notify = useCallback((msg: string) => {
     setToastMessage(msg)
@@ -205,6 +224,11 @@ export function SharedSessionRoom({
           onChallengeResult: (res) => {
             if (res.challenge) {
               const resStatus = res.challenge.status.toLowerCase() as ChallengeStatus
+              const newChallengeScore =
+                res.challengeScore ??
+                (resStatus === 'passed' ? 100 : resStatus === 'partial' ? 50 : 0)
+              challengeScoreRef.current =
+                resStatus === 'failed' ? 0 : newChallengeScore
               setChallengeStatus(resStatus)
               setData((prev) => ({
                 ...prev,
@@ -212,12 +236,7 @@ export function SharedSessionRoom({
                 scores: {
                   ...prev.scores,
                   challenge:
-                    res.challengeScore ??
-                    (resStatus === 'passed'
-                      ? 100
-                      : resStatus === 'partial'
-                      ? 50
-                      : 0),
+                    resStatus === 'failed' ? 0 : newChallengeScore,
                 },
               }))
             }
@@ -325,6 +344,8 @@ export function SharedSessionRoom({
 
     missingStartTimeRef.current = null
     wasMissingRef.current = false
+    faceVisibleRef.current = false
+    lastSignalSentRef.current = 0
 
     setFaceState({
       liveState: 'WAITING_FOR_CAMERA',
@@ -339,12 +360,120 @@ export function SharedSessionRoom({
       detectorType: 'none',
     })
 
+    // Return to the honest default live state: evidence not evaluated yet.
+    setData((prev) => ({
+      name: DEFAULT_LIVE_SESSION_DATA.name,
+      risk: null,
+      status: 'Not evaluated',
+      confidence: 'Not available',
+      quality: 'Not available',
+      challenge: prev.challenge,
+      explanation:
+        'Camera stopped. Waiting for browser camera and microphone signals to resume evaluation.',
+      scores: {
+        face: null,
+        voice: null,
+        challenge: prev.scores.challenge,
+        stream: null,
+      },
+      events: prev.events,
+    }))
+
     notify('Camera disconnected & face detector unloaded')
   }
 
   // Real-time Face Detection Loop (Runs every 300ms)
   useEffect(() => {
     if (!stream || isDemoLabActive) return
+
+    /**
+     * Push real derived browser-sensor signals to the backend and update the
+     * shared state from the server-side risk scorer response.
+     */
+    const sendVisibleSignals = async (result: FaceDetectionResult) => {
+      const faceScore = result.motionScore
+      const voice = deriveVoiceScore(isMicAvailableRef.current, audioLevelRef.current)
+      const quality = deriveStreamScore(stream)
+
+      // Update the shared panel with the real derived browser-sensor scores.
+      setData((prev) => ({
+        ...prev,
+        quality: 'Good',
+        explanation:
+          'Live browser sensor active: face motion, microphone activity and stream quality measured from real device signals.',
+        scores: {
+          ...prev.scores,
+          face: faceScore,
+          voice,
+          stream: quality,
+        },
+      }))
+
+      lastSignalSentRef.current = Date.now()
+
+      try {
+        const res = await api.sessions.sendSignals(sessionId, {
+          faceMotionScore: faceScore,
+          lipSyncScore: voice,
+          challengeScore: challengeScoreRef.current,
+          streamQualityScore: quality,
+          visualEvidenceAvailable: true,
+          audioEvidenceAvailable: isMicAvailableRef.current,
+        })
+        // Risk is only ever set from the real scorer, never hardcoded.
+        setData((prev) => ({
+          ...prev,
+          risk: res.riskScore,
+          status: formatRiskStatus(res.riskStatus),
+          confidence: formatConfidence(res.confidence),
+          explanation: res.explanation || prev.explanation,
+        }))
+      } catch (e) {
+        console.warn('[PRAMAAN] Backend signal ingest unavailable:', e)
+        setData((prev) => ({
+          ...prev,
+          explanation:
+            'Browser sensor is producing live signals locally, but the backend evaluation service is currently unreachable.',
+        }))
+      }
+    }
+
+    /**
+     * Push the face-not-visible payload exactly as the spec requires
+     * (all scores null, visual evidence unavailable).
+     */
+    const sendMissingSignals = async () => {
+      setData((prev) => ({
+        ...prev,
+        risk: 32,
+        status: 'Insufficient Evidence',
+        confidence: 'Low',
+        quality: 'Degraded',
+        explanation:
+          'Visual evidence is temporarily unavailable. This does not prove dishonesty.',
+        scores: {
+          ...prev.scores,
+          face: null,
+          voice: null,
+          stream: null,
+        },
+      }))
+
+      lastSignalSentRef.current = Date.now()
+
+      try {
+        await api.sessions.sendSignals(sessionId, {
+          faceMotionScore: null,
+          lipSyncScore: null,
+          challengeScore: null,
+          streamQualityScore: null,
+          visualEvidenceAvailable: false,
+          audioEvidenceAvailable: isMicAvailableRef.current,
+        })
+      } catch (e) {
+        console.warn('[PRAMAAN] Backend face-missing notice failed:', e)
+      }
+    }
 
     const interval = setInterval(async () => {
       const videoEl = videoRef.current
@@ -354,93 +483,91 @@ export function SharedSessionRoom({
       try {
         const result = await detectFaceInVideo(videoEl)
 
+        if (result.detectorStatus === 'loading') {
+          return
+        }
+
+        // Detector never loaded -> honest "Face detector unavailable" state.
+        // Never fabricate "Face visible", scores, or Insufficient Evidence.
+        if (result.detectorStatus === 'unavailable') {
+          faceVisibleRef.current = false
+          wasMissingRef.current = false
+          missingStartTimeRef.current = null
+          setFaceState((prev) => ({
+            ...prev,
+            liveState: 'DETECTOR_UNAVAILABLE',
+            isLiveActive: true,
+            faceVisible: false,
+            confidence: 0,
+            motionScore: null,
+            box: undefined,
+            landmarks: undefined,
+          }))
+          return
+        }
+
         if (result.faceDetected) {
+          const hadBeenMissing = wasMissingRef.current
+          const firstVisible = !faceVisibleRef.current
+          faceVisibleRef.current = true
+          wasMissingRef.current = false
           missingStartTimeRef.current = null
 
-          const isInitialDetection = data.status === 'Not evaluated'
-
-          if (wasMissingRef.current || isInitialDetection) {
-            const hadBeenMissing = wasMissingRef.current
-            wasMissingRef.current = false
-
-            if (hadBeenMissing) {
-              notify('Face visible again')
-              const restoredEvent: TimelineEvent = {
-                time: new Date().toLocaleTimeString([], {
-                  minute: '2-digit',
-                  second: '2-digit',
-                }),
+          // Emit events + send signals only on transitions (and on a slow
+          // periodic refresh) — never on every 300ms detection cycle.
+          if (hadBeenMissing) {
+            notify('Face visible again')
+            const restoredEvent: TimelineEvent = {
+              time: new Date().toLocaleTimeString([], {
+                minute: '2-digit',
+                second: '2-digit',
+              }),
+              title: 'Visual evidence restored',
+              description: 'Candidate face returned to the camera frame.',
+              type: 'normal',
+            }
+            setEvents((prev) => [
+              restoredEvent,
+              ...prev.filter((e) => e.title !== 'Visual evidence restored'),
+            ])
+            await sendVisibleSignals(result)
+            try {
+              await api.sessions.createEvent(sessionId, {
+                type: 'VERIFIED',
                 title: 'Visual evidence restored',
                 description: 'Candidate face returned to the camera frame.',
-                type: 'normal',
-              }
-              setEvents((prev) => [
-                restoredEvent,
-                ...prev.filter((e) => e.title !== 'Visual evidence restored'),
-              ])
-            } else if (isInitialDetection) {
-              notify('Face visible — Browser sensor connected')
-              const baselineEvent: TimelineEvent = {
-                time: new Date().toLocaleTimeString([], {
-                  minute: '2-digit',
-                  second: '2-digit',
-                }),
-                title: 'Baseline created',
-                description: 'Browser sensor active. Natural facial motion verified.',
-                type: 'normal',
-              }
-              setEvents((prev) => [
-                baselineEvent,
-                ...prev.filter((e) => e.title !== 'Waiting for browser signals'),
-              ])
-            }
-
-            const derivedScore = result.motionScore ?? 94
-
-            setData((prev) => ({
-              ...prev,
-              risk: 12,
-              status: 'Low Risk',
-              confidence: 'High',
-              quality: 'Good',
-              scores: {
-                ...prev.scores,
-                face: derivedScore,
-                voice: 96,
-                stream: 92,
-              },
-              explanation:
-                'Signals are consistent across face motion, voice timing, challenge response and stream quality.',
-            }))
-
-            try {
-              await api.sessions.sendSignals(sessionId, {
-                faceMotionScore: derivedScore,
-                lipSyncScore: 96,
-                challengeScore: data.scores.challenge ?? 100,
-                streamQualityScore: 92,
-                visualEvidenceAvailable: true,
-                audioEvidenceAvailable: true,
+                severity: 'normal',
               })
-              if (hadBeenMissing) {
-                await api.sessions.createEvent(sessionId, {
-                  type: 'VERIFIED',
-                  title: 'Visual evidence restored',
-                  description: 'Candidate face returned to the camera frame.',
-                  severity: 'normal',
-                })
-              }
             } catch (e) {
-              console.warn('Backend face update notice:', e)
+              console.warn('[PRAMAAN] Backend restore event failed:', e)
             }
+          } else if (firstVisible) {
+            notify('Face visible — Browser sensor connected')
+            const baselineEvent: TimelineEvent = {
+              time: new Date().toLocaleTimeString([], {
+                minute: '2-digit',
+                second: '2-digit',
+              }),
+              title: 'Baseline created',
+              description: 'Browser sensor active. Natural facial motion verified.',
+              type: 'normal',
+            }
+            setEvents((prev) => [
+              baselineEvent,
+              ...prev.filter((e) => e.title !== 'Waiting for browser signals'),
+            ])
+            await sendVisibleSignals(result)
+          } else if (Date.now() - lastSignalSentRef.current >= 3000) {
+            // Slow periodic refresh keeps the server-side risk current.
+            await sendVisibleSignals(result)
           }
 
           setFaceState({
             liveState: 'FACE_VISIBLE',
             isLiveActive: true,
             faceVisible: true,
-            confidence: result.confidence || 96,
-            motionScore: result.motionScore ?? 94,
+            confidence: result.confidence,
+            motionScore: result.motionScore,
             isCovered: false,
             isOutsideFrame: false,
             missingDurationMs: 0,
@@ -450,7 +577,6 @@ export function SharedSessionRoom({
             landmarks: result.landmarks,
           })
         } else {
-          // No face detected
           if (missingStartTimeRef.current === null) {
             missingStartTimeRef.current = Date.now()
           }
@@ -459,6 +585,7 @@ export function SharedSessionRoom({
           // Threshold: 1.5 seconds continuously missing
           if (elapsed >= 1500 && !wasMissingRef.current) {
             wasMissingRef.current = true
+            faceVisibleRef.current = false
             notify('Face not visible')
 
             const missingEvent: TimelineEvent = {
@@ -476,29 +603,9 @@ export function SharedSessionRoom({
               ...prev.filter((e) => e.title !== 'Face no longer visible'),
             ])
 
-            setData((prev) => ({
-              ...prev,
-              risk: 32,
-              status: 'Insufficient Evidence',
-              confidence: 'Low',
-              scores: {
-                ...prev.scores,
-                face: null,
-              },
-              quality: 'Degraded',
-              explanation:
-                'Visual evidence is temporarily unavailable. This does not prove dishonesty.',
-            }))
+            await sendMissingSignals()
 
             try {
-              await api.sessions.sendSignals(sessionId, {
-                faceMotionScore: null,
-                lipSyncScore: null,
-                challengeScore: null,
-                streamQualityScore: null,
-                visualEvidenceAvailable: false,
-                audioEvidenceAvailable: true,
-              })
               await api.sessions.createEvent(sessionId, {
                 type: 'WARNING',
                 title: 'Face no longer visible',
@@ -507,7 +614,7 @@ export function SharedSessionRoom({
                 severity: 'warning',
               })
             } catch (e) {
-              console.warn('Backend face missing notice:', e)
+              console.warn('[PRAMAAN] Backend missing event failed:', e)
             }
           }
 
@@ -525,23 +632,22 @@ export function SharedSessionRoom({
           }))
         }
       } catch (err) {
-        console.warn('Detection tick error:', err)
+        console.warn('[PRAMAAN] Detection tick error:', err)
       } finally {
         isSamplingRef.current = false
       }
     }, 300)
 
     return () => clearInterval(interval)
-  }, [stream, isDemoLabActive, sessionId, data.scores.challenge, notify])
+  }, [stream, isDemoLabActive, sessionId])
 
   // Speech Recognition Challenge Execution
   const handleRequestChallenge = async () => {
     setChallengeStatus('waiting_for_response')
     setCountdownSeconds(20)
     setSpeechTranscript('')
-    setSpeechActive(true)
 
-    notify('Live challenge requested — listening for candidate response')
+    notify('Live challenge requested — awaiting candidate response')
 
     let challengeId = activeChallengeId
     try {
@@ -549,13 +655,16 @@ export function SharedSessionRoom({
       if (issued.challenge?.id) {
         challengeId = issued.challenge.id
         setActiveChallengeId(challengeId)
+        // Challenge is ISSUED in the backend and stays PENDING in the UI until
+        // a real transcript verifies it. Never auto-marked as passed.
       }
     } catch (err) {
-      console.warn('Backend challenge issue error:', err)
+      console.warn('[PRAMAAN] Backend challenge issue error:', err)
     }
 
-    // Start SpeechRecognition if supported
+    // Start the countdown + SpeechRecognition only when supported.
     if (isSpeechRecognitionSupported()) {
+      setSpeechActive(true)
       if (speechSessionRef.current) {
         speechSessionRef.current.abort()
       }
@@ -569,10 +678,10 @@ export function SharedSessionRoom({
         onOutcome: async (outcome, transcript) => {
           setSpeechActive(false)
           setSpeechTranscript(transcript)
-          handleCompleteChallenge(outcome, transcript, challengeId)
+          handleCompleteChallenge(outcome, transcript, challengeId, 'Speech recognition')
         },
         onError: (err) => {
-          console.warn('SpeechRecognition session error:', err)
+          console.warn('[PRAMAAN] SpeechRecognition session error:', err)
         },
         onEnd: () => {
           setSpeechActive(false)
@@ -583,6 +692,9 @@ export function SharedSessionRoom({
       session.start()
     } else {
       setHasSpeechSupport(false)
+      // Challenge is kept WAITING_FOR_RESPONSE — no auto-pass, no auto-fail.
+      // The recruiter records the outcome manually.
+      notify('Speech verification unavailable — recruiter confirmation required')
     }
   }
 
@@ -590,23 +702,30 @@ export function SharedSessionRoom({
   const handleCompleteChallenge = async (
     outcome: 'passed' | 'partial' | 'failed',
     transcriptText?: string,
-    challengeId?: string | null
+    challengeId?: string | null,
+    source: 'Speech recognition' | 'Recruiter recorded' = 'Speech recognition'
   ) => {
     setChallengeStatus(outcome)
     setSpeechActive(false)
 
     const score = outcome === 'passed' ? 100 : outcome === 'partial' ? 50 : 0
+    challengeScoreRef.current = score
 
     const eventTitle =
       outcome === 'passed'
-        ? 'Challenge passed'
+        ? source === 'Recruiter recorded'
+          ? 'Challenge passed — Recruiter recorded'
+          : 'Challenge passed'
         : outcome === 'partial'
         ? 'Challenge partially completed'
         : 'Challenge failed'
 
-    const eventDesc = transcriptText
-      ? `Candidate response: "${transcriptText}" — Result: ${outcome.toUpperCase()}.`
-      : `Challenge outcome evaluated as ${outcome.toUpperCase()}.`
+    const eventDesc =
+      source === 'Recruiter recorded'
+        ? `Recruiter recorded outcome: ${outcome.toUpperCase()}.`
+        : transcriptText
+        ? `Candidate response: "${transcriptText}" — Result: ${outcome.toUpperCase()}.`
+        : `Challenge outcome evaluated as ${outcome.toUpperCase()}.`
 
     const newEv: TimelineEvent = {
       time: new Date().toLocaleTimeString([], {
@@ -623,7 +742,10 @@ export function SharedSessionRoom({
           : 'critical',
     }
 
-    setEvents((prev) => [newEv, ...prev.filter((e) => e.title !== eventTitle)])
+    setEvents((prev) => [
+      newEv,
+      ...prev.filter((e) => e.title !== eventTitle),
+    ])
 
     setData((prev) => ({
       ...prev,
@@ -634,7 +756,11 @@ export function SharedSessionRoom({
       },
     }))
 
-    notify(`Challenge evaluated: ${outcome.toUpperCase()}`)
+    notify(
+      source === 'Recruiter recorded'
+        ? `Challenge recorded: ${outcome.toUpperCase()} (Recruiter)`
+        : `Challenge evaluated: ${outcome.toUpperCase()}`
+    )
 
     const cId = challengeId || activeChallengeId
     if (cId) {
@@ -644,35 +770,33 @@ export function SharedSessionRoom({
           outcome.toUpperCase() as 'PASSED' | 'PARTIAL' | 'FAILED'
         )
       } catch (err) {
-        console.warn('Challenge submit error:', err)
+        console.warn('[PRAMAAN] Challenge submit error:', err)
       }
     }
   }
 
-  // Recruiter Manual Record Fallback
+  // Recruiter Manual Record Fallback (SpeechRecognition unavailable)
   const handleManualRecord = (outcome: 'passed' | 'partial' | 'failed') => {
-    handleCompleteChallenge(
-      outcome,
-      `Recruiter recorded outcome: ${outcome.toUpperCase()}`
-    )
+    handleCompleteChallenge(outcome, undefined, null, 'Recruiter recorded')
   }
 
-  // Countdown timer effect
+  // Countdown timer effect.
+  // Runs only when SpeechRecognition is available. When it is unsupported the
+  // challenge stays WAITING_FOR_RESPONSE until the recruiter records a result.
   useEffect(() => {
-    if (challengeStatus !== 'waiting_for_response') return
-    const timer = setInterval(() => {
-      setCountdownSeconds((prev) => {
-        if (prev <= 1) {
-          // Timer expired -> FAILED
-          handleCompleteChallenge('failed', 'Latency window expired (20s)')
-          return 0
-        }
-        return prev - 1
-      })
+    if (challengeStatus !== 'waiting_for_response' || !hasSpeechSupport) return
+
+    if (countdownSeconds <= 0) {
+      handleCompleteChallenge('failed', 'Response window expired (20s)')
+      return
+    }
+
+    const timer = setTimeout(() => {
+      setCountdownSeconds((prev) => prev - 1)
     }, 1000)
 
-    return () => clearInterval(timer)
-  }, [challengeStatus])
+    return () => clearTimeout(timer)
+  }, [challengeStatus, countdownSeconds, hasSpeechSupport])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -963,16 +1087,21 @@ export function SharedSessionRoom({
                   }}
                 >
                   {challengeStatus === 'waiting_for_response'
-                    ? `Waiting (${countdownSeconds}s)`
+                    ? !hasSpeechSupport
+                      ? 'Waiting (recruiter)'
+                      : `Waiting (${countdownSeconds}s)`
+                    : challengeStatus === 'pending'
+                    ? 'Pending'
                     : challengeStatus}
                 </span>
 
-                {challengeStatus === 'waiting_for_response' && (
-                  <div className="flex items-center gap-1 font-mono text-xs text-[var(--cobalt)] bg-[var(--cobalt-subtle)] px-2 py-0.5 rounded">
-                    <Clock size={11} />
-                    <span>{countdownSeconds}s</span>
-                  </div>
-                )}
+                {challengeStatus === 'waiting_for_response' &&
+                  hasSpeechSupport && (
+                    <div className="flex items-center gap-1 font-mono text-xs text-[var(--cobalt)] bg-[var(--cobalt-subtle)] px-2 py-0.5 rounded">
+                      <Clock size={11} />
+                      <span>{countdownSeconds}s</span>
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -990,9 +1119,15 @@ export function SharedSessionRoom({
             {challengeStatus === 'waiting_for_response' && (
               <div className="p-2.5 rounded bg-[var(--cobalt-subtle)] border border-[rgba(49,91,255,0.2)] text-xs flex flex-col gap-1">
                 <div className="flex items-center gap-2 text-[var(--cobalt)] font-semibold text-[11px]">
-                  <Sparkles size={12} className="animate-spin" />
+                  {hasSpeechSupport ? (
+                    <Sparkles size={12} className="animate-spin" />
+                  ) : (
+                    <Clock size={12} />
+                  )}
                   <span>
-                    {speechActive
+                    {!hasSpeechSupport
+                      ? 'Speech verification unavailable — awaiting recruiter confirmation'
+                      : speechActive
                       ? 'Listening for candidate speech...'
                       : 'Speech processing...'}
                   </span>
@@ -1018,6 +1153,7 @@ export function SharedSessionRoom({
                     type="button"
                     className="btn-doc btn-doc-sm flex-1"
                     onClick={() => handleManualRecord('passed')}
+                    disabled={speechActive}
                     title="Recruiter recorded: Passed"
                   >
                     <CheckCircle2 size={11} className="text-[var(--verified-green)]" />
@@ -1027,6 +1163,7 @@ export function SharedSessionRoom({
                     type="button"
                     className="btn-doc btn-doc-sm flex-1"
                     onClick={() => handleManualRecord('partial')}
+                    disabled={speechActive}
                     title="Recruiter recorded: Partial"
                   >
                     <AlertTriangle size={11} className="text-[var(--review-amber)]" />
@@ -1036,6 +1173,7 @@ export function SharedSessionRoom({
                     type="button"
                     className="btn-doc btn-doc-sm flex-1"
                     onClick={() => handleManualRecord('failed')}
+                    disabled={speechActive}
                     title="Recruiter recorded: Failed"
                   >
                     <AlertTriangle size={11} className="text-[var(--concern-coral)]" />
@@ -1057,7 +1195,7 @@ export function SharedSessionRoom({
               <div className="flex items-center gap-2">
                 <span className="paper-section-title">Integrity Signal</span>
                 <span className="scenario-badge normal">
-                  {faceState.isLiveActive ? 'Browser sensor' : 'Demo scenario'}
+                  {isDemoLabActive ? 'Demo scenario' : 'Browser sensor'}
                 </span>
               </div>
               <span className="text-xs font-mono text-[var(--text-muted)]">
@@ -1146,7 +1284,7 @@ export function SharedSessionRoom({
             <div className="flex items-center justify-between mb-1">
               <span className="paper-section-title">Signal Analysis</span>
               <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                {faceState.isLiveActive ? 'Browser sensor' : 'Demo scenario'}
+                {isDemoLabActive ? 'Demo scenario' : 'Browser sensor'}
               </span>
             </div>
 
@@ -1217,7 +1355,7 @@ export function SharedSessionRoom({
                 >
                   {data.scores.voice === null
                     ? isMicAvailable
-                      ? '96 / 100'
+                      ? 'Microphone active'
                       : 'Waiting for mic'
                     : `${data.scores.voice} / 100`}
                 </span>
@@ -1226,16 +1364,16 @@ export function SharedSessionRoom({
                 <div
                   className="flat-signal-progress"
                   style={{
-                    width: `${data.scores.voice ?? (isMicAvailable ? 96 : 0)}%`,
-                    background: getSignalColor(
-                      data.scores.voice ?? (isMicAvailable ? 96 : null)
-                    ),
+                    width: `${data.scores.voice ?? 0}%`,
+                    background: getSignalColor(data.scores.voice ?? null),
                   }}
                 />
               </div>
               <div className="signal-explainer-subtext">
                 {isMicAvailable
-                  ? 'Microphone active — speech timing aligned'
+                  ? data.scores.voice === null
+                    ? 'Microphone active — waiting for face signal'
+                    : 'Microphone activity measured from real audio analyser'
                   : 'Waiting for microphone audio sensor.'}
               </div>
             </div>
@@ -1310,7 +1448,7 @@ export function SharedSessionRoom({
                 >
                   {data.scores.stream === null
                     ? stream
-                      ? '92 / 100'
+                      ? 'Live stream'
                       : 'Waiting for stream'
                     : `${data.scores.stream} / 100`}
                 </span>
@@ -1319,16 +1457,14 @@ export function SharedSessionRoom({
                 <div
                   className="flat-signal-progress"
                   style={{
-                    width: `${data.scores.stream ?? (stream ? 92 : 0)}%`,
-                    background: getSignalColor(
-                      data.scores.stream ?? (stream ? 92 : null)
-                    ),
+                    width: `${data.scores.stream ?? 0}%`,
+                    background: getSignalColor(data.scores.stream ?? null),
                   }}
                 />
               </div>
               <div className="signal-explainer-subtext">
                 {stream
-                  ? 'Video continuity is stable'
+                  ? 'Resolution & frame-rate read from the real camera track'
                   : 'Waiting for camera connection.'}
               </div>
             </div>

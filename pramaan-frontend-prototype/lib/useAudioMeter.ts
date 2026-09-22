@@ -9,6 +9,20 @@ export interface AudioMeterState {
   statusText: string
 }
 
+/**
+ * Derive an honest voice-activity score from the real microphone analyser.
+ * Returns null only when the microphone is unavailable.
+ */
+export function deriveVoiceScore(
+  isMicAvailable: boolean,
+  audioLevel: number
+): number | null {
+  if (!isMicAvailable) return null
+  // Quiet room -> ~60 (mic confirmed working, low energy).
+  // Active speech -> ~85-100 based on measured RMS energy.
+  return Math.round(Math.min(100, Math.max(25, 60 + audioLevel * 40)))
+}
+
 export function useAudioMeter(stream: MediaStream | null): AudioMeterState {
   const [audioLevel, setAudioLevel] = useState<number>(0)
   const [waveformHeights, setWaveformHeights] = useState<number[]>(() =>

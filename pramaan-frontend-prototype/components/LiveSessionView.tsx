@@ -138,7 +138,7 @@ export function LiveSessionView({
   }
 
   // Smoothly animated risk score
-  const animatedRisk = useAnimatedNumber(data.risk, 400)
+  const animatedRisk = useAnimatedNumber(data.risk ?? 0, 400)
   // Calculate position along the spectrum (0% to 100%)
   const spectrumPosition = Math.min(Math.max(animatedRisk, 0), 100)
 

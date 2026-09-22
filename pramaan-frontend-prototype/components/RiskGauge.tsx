@@ -5,24 +5,26 @@ import { IntegrityStatus } from '@/types/pramaan'
 import { ShieldAlert, CheckCircle2, HelpCircle, AlertCircle } from 'lucide-react'
 
 interface RiskGaugeProps {
-  risk: number
+  risk: number | null
   status: IntegrityStatus
-  confidence: 'High' | 'Medium' | 'Low'
+  confidence: 'High' | 'Medium' | 'Low' | 'Not available'
 }
 
 export function RiskGauge({ risk, status, confidence }: RiskGaugeProps) {
+  const safeRisk = risk ?? 0
+
   // Determine color theme based on score and status
   let color = '#56E39F' // Green for Low Risk
-  if (status === 'Review Recommended' || risk >= 70) {
+  if (status === 'Review Recommended' || safeRisk >= 70) {
     color = '#FF6F91' // Pink
-  } else if (status === 'Insufficient Evidence' || (risk >= 25 && risk < 70)) {
+  } else if (status === 'Insufficient Evidence' || (safeRisk >= 25 && safeRisk < 70)) {
     color = '#FF9D4D' // Orange / Gold
   } else if (status === 'High Concern') {
     color = '#FF6F91'
   }
 
   // Calculate degrees for radial gauge (0 to 100 -> 0 to 240 deg)
-  const degrees = Math.min(Math.max((risk / 100) * 240, 5), 240)
+  const degrees = Math.min(Math.max((safeRisk / 100) * 240, 5), 240)
 
   return (
     <div className="risk-gauge-container">
@@ -45,7 +47,7 @@ export function RiskGauge({ risk, status, confidence }: RiskGaugeProps) {
             className="gauge-value-arc"
             style={{
               stroke: color,
-              strokeDasharray: `${(risk / 100) * 360} 500`,
+              strokeDasharray: `${(safeRisk / 100) * 360} 500`,
               strokeDashoffset: '-60',
               filter: `drop-shadow(0 0 8px ${color})`,
             }}
@@ -55,7 +57,7 @@ export function RiskGauge({ risk, status, confidence }: RiskGaugeProps) {
         {/* Inner Gauge Metric */}
         <div className="gauge-inner-data">
           <span className="gauge-number" style={{ color: '#FFFFFF' }}>
-            {risk}
+            {risk === null ? '--' : safeRisk}
           </span>
           <span className="gauge-scale">/ 100</span>
           <span className="gauge-label">RISK SCORE</span>
@@ -84,7 +86,9 @@ export function RiskGauge({ risk, status, confidence }: RiskGaugeProps) {
                     ? '#56E39F'
                     : confidence === 'Medium'
                     ? '#FFD45E'
-                    : '#FF9D4D',
+                    : confidence === 'Low'
+                    ? '#FF9D4D'
+                    : '#8A8FA0',
               }}
             >
               {confidence}

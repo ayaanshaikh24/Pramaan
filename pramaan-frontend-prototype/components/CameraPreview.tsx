@@ -17,7 +17,7 @@ import { FacePresenceState } from '@/types/pramaan'
 
 interface CameraPreviewProps {
   stream: MediaStream | null
-  quality: 'Good' | 'Poor' | 'Degraded'
+  quality: 'Good' | 'Poor' | 'Degraded' | 'Not available'
   isLowQualityMode: boolean
   cameraError?: string | null
   faceState?: FacePresenceState
