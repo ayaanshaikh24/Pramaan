@@ -68,4 +68,5 @@ coverage/
 
 # Local browser-API verification harness
 test-live-shared.mjs
+test-live-camera.mjs
 
