@@ -54,3 +54,11 @@ __v0_jsx-dev-runtime.ts
 .snowflake/
 .v0-trash/
 .vercel/
+
+# Test artifacts & temporary screenshots
+artifacts/camera-pipeline-test/
+coverage/
+.nyc_output/
+*.tmp
+*.temp
+

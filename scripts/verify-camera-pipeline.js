@@ -1,10 +1,10 @@
-// Full verification runner for PRAMAAN real camera sensor pipeline
+// Comprehensive Verification for PRAMAAN Real Browser Camera Sensor Pipeline
 import { spawn } from 'child_process'
 import { writeFileSync, mkdirSync } from 'fs'
 import path from 'path'
 
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const DEBUG_PORT = 9228
+const DEBUG_PORT = 9229
 const SCREENSHOT_DIR = path.resolve(process.cwd(), 'artifacts/camera-pipeline-test')
 
 try {
@@ -61,7 +61,7 @@ class CDPClient {
     const res = await this.send('Page.captureScreenshot', { format: 'png' })
     const buf = Buffer.from(res.data, 'base64')
     writeFileSync(path.join(SCREENSHOT_DIR, filename), buf)
-    console.log(`📸 Screenshot saved: ${filename}`)
+    console.log(`📸 Screenshot: artifacts/camera-pipeline-test/${filename}`)
   }
 
   close() {
@@ -70,10 +70,9 @@ class CDPClient {
 }
 
 async function runTest() {
-  console.log('==================================================================')
-  console.log('PRAMAAN CRITICAL LIVE CAMERA SENSOR PIPELINE VERIFICATION TEST')
-  console.log('==================================================================')
-  console.log('🚀 Launching Google Chrome with remote debugging...')
+  console.log('====================================================================')
+  console.log('PRAMAAN CRITICAL LIVE CAMERA SENSOR PIPELINE VERIFICATION SUITE')
+  console.log('====================================================================')
 
   const chromeProcess = spawn(
     CHROME_PATH,
@@ -84,7 +83,7 @@ async function runTest() {
       '--use-fake-device-for-media-stream',
       '--no-sandbox',
       '--disable-dev-shm-usage',
-      '--window-size=1360,920',
+      '--window-size=1360,940',
     ],
     { stdio: 'ignore' }
   )
@@ -103,35 +102,18 @@ async function runTest() {
     await cdp.send('Page.enable')
     await cdp.send('Runtime.enable')
 
-    // 1. Navigate to frontend
-    console.log('\n[1/8] Navigating to http://localhost:3000...')
+    // 1. Navigate to localhost:3000
+    console.log('\n[Step 1] Navigating to http://localhost:3000...')
     await cdp.send('Page.navigate', { url: 'http://localhost:3000' })
     await sleep(2500)
-    await cdp.captureScreenshot('01_dashboard_initial.png')
+    await cdp.captureScreenshot('step01_dashboard_landing.png')
 
-    // 2. Open Candidate View
-    console.log('[2/8] Opening Candidate View...')
+    // Setup getUserMedia mock with dynamic frame generator (renders test-face.jpg, outside, covered)
+    console.log('[Setup] Injecting dynamic camera stream mock for deterministic sensor validation...')
     await cdp.evaluate(`
-      const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Candidate View'));
-      if (btn) btn.click();
-    `)
-    await sleep(800)
-    await cdp.captureScreenshot('02_candidate_view.png')
-
-    // 3. Grant camera permission & click Start Camera
-    console.log('[3/8] Starting Camera Stream...')
-    await cdp.evaluate(`
-      const startBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Start camera'));
-      if (startBtn) startBtn.click();
-    `)
-    await sleep(1200)
-
-    // Attach active test feed animator on candidate video
-    await cdp.evaluate(`
-      (async () => {
+      (() => {
         const img = new Image();
         img.src = '/test-face.jpg';
-        await new Promise(r => { img.onload = r; img.onerror = r; });
 
         const canvas = document.createElement('canvas');
         canvas.width = 640;
@@ -141,37 +123,64 @@ async function runTest() {
         window.__feedMode = 'face'; // 'face' | 'outside' | 'covered'
         window.__animRunning = true;
 
-        function renderFrame() {
+        let frameTick = 0;
+        function renderLoop() {
           if (!window.__animRunning) return;
+          frameTick++;
           if (window.__feedMode === 'face') {
-            ctx.drawImage(img, 0, 0, 640, 480);
+            // Natural slight micro-variation to trigger motion scoring
+            const microDx = Math.sin(frameTick * 0.1) * 1.5;
+            ctx.drawImage(img, microDx, 0, 640, 480);
           } else if (window.__feedMode === 'outside') {
-            ctx.fillStyle = '#758285';
+            ctx.fillStyle = '#6e7a7d';
             ctx.fillRect(0, 0, 640, 480);
           } else if (window.__feedMode === 'covered') {
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, 640, 480);
           }
-          requestAnimationFrame(renderFrame);
+          requestAnimationFrame(renderLoop);
         }
-        renderFrame();
+        renderLoop();
 
         const canvasStream = canvas.captureStream(30);
-        // Replace candidate video stream with dynamic canvas stream
-        const candidateVideo = document.querySelector('video');
-        if (candidateVideo) {
-          candidateVideo.srcObject = canvasStream;
-          await candidateVideo.play().catch(() => {});
-        }
+
+        // Add dummy audio track for Web Audio Analyser
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const dst = audioCtx.createMediaStreamDestination();
+        osc.connect(dst);
+        osc.start();
+        const audioTrack = dst.stream.getAudioTracks()[0];
+        canvasStream.addTrack(audioTrack);
+
+        // Override getUserMedia to return this dynamic stream
+        navigator.mediaDevices.getUserMedia = async (constraints) => {
+          return canvasStream;
+        };
       })()
     `)
 
-    // Allow detector loop 1.5s to run on face feed
-    await sleep(1800)
-    await cdp.captureScreenshot('03_candidate_face_visible.png')
+    // 2. Open Candidate View
+    console.log('\n[Step 2] Opening Candidate View...')
+    await cdp.evaluate(`
+      const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Candidate View'));
+      if (btn) btn.click();
+    `)
+    await sleep(800)
+    await cdp.captureScreenshot('step02_candidate_view.png')
 
-    // 4 & 5. Verify "Face visible" and bounding box overlay
-    console.log('[4/8] Verifying "Face visible" and bounding box overlay...')
+    // 3. Grant camera permission & Click Start Camera
+    console.log('\n[Step 3] Granting camera & Clicking "Start camera"...')
+    await cdp.evaluate(`
+      const startBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Start camera'));
+      if (startBtn) startBtn.click();
+    `)
+    // Allow detector 1.5s to run on face feed
+    await sleep(1800)
+    await cdp.captureScreenshot('step03_candidate_face_visible.png')
+
+    // 4 & 5. Verify "Face visible" and face overlay bounding box
+    console.log('\n[Step 4 & 5] Verifying "Face visible" & Landmark Bounding Box Overlay...')
     const candidateFaceCheck = await cdp.evaluate(`
       (() => {
         const text = document.body.innerText;
@@ -187,43 +196,42 @@ async function runTest() {
             top: box.style.top,
             width: box.style.width,
             height: box.style.height
-          } : null
+          } : null,
+          micActive: text.includes('Microphone ready')
         };
       })()
     `)
-    console.log('Candidate View Face Check:', candidateFaceCheck)
-    if (!candidateFaceCheck.hasFaceVisible) {
-      console.warn('⚠️ Notice: Face visible text check:', candidateFaceCheck)
-    }
+    console.log('Candidate View Check:', candidateFaceCheck)
 
-    // 6 & 7. Move outside the frame for > 2 seconds
-    console.log('\n[5/8] Simulating candidate leaving frame for 2.2 seconds...')
+    // 6 & 7. Candidate moves OUTSIDE frame for at least 2 seconds
+    console.log('\n[Step 6 & 7] Candidate moving outside frame for 2.2 seconds...')
     await cdp.evaluate(`window.__feedMode = 'outside';`)
     await sleep(2200)
-    await cdp.captureScreenshot('04_candidate_outside_frame.png')
+    await cdp.captureScreenshot('step04_candidate_outside_frame.png')
 
-    const outsideCheck = await cdp.evaluate(`
+    const candidateOutsideCheck = await cdp.evaluate(`
       (() => {
         const text = document.body.innerText;
         const box = document.querySelector('.face-detected-bounding-box');
         return {
           hasFaceNotVisible: text.includes('Face not visible') || text.includes('Face Not In Frame'),
-          boxHidden: !box
+          boxHidden: !box,
+          hasOutsideAlert: text.includes('Candidate face moved outside camera frame')
         };
       })()
     `)
-    console.log('Candidate View Outside Frame Check:', outsideCheck)
+    console.log('Candidate Outside Frame Check:', candidateOutsideCheck)
 
-    // 8, 9 & 10. Switch to Recruiter Live Session & verify dashboard changes
-    console.log('\n[6/8] Switching to Recruiter Live Session View...')
+    // 8, 9 & 10. Switch to Recruiter Dashboard (Live Session View)
+    console.log('\n[Step 8, 9 & 10] Switching to Recruiter Dashboard & verifying changes...')
     await cdp.evaluate(`
       const liveBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Live Session'));
       if (liveBtn) liveBtn.click();
     `)
     await sleep(1000)
-    await cdp.captureScreenshot('05_recruiter_dashboard_insufficient_evidence.png')
+    await cdp.captureScreenshot('step05_recruiter_dashboard_insufficient_evidence.png')
 
-    const dashboardCheck = await cdp.evaluate(`
+    const recruiterMissingCheck = await cdp.evaluate(`
       (() => {
         const text = document.body.innerText;
         const events = Array.from(document.querySelectorAll('.incident-headline')).map(e => e.innerText);
@@ -239,59 +247,95 @@ async function runTest() {
         };
       })()
     `)
-    console.log('Recruiter Dashboard Insufficient Evidence Check:', dashboardCheck)
+    console.log('Recruiter Dashboard Insufficient Evidence Check:', recruiterMissingCheck)
 
-    // 11 & 12. Cover camera for 2.2 seconds
-    console.log('\n[7/8] Simulating camera covered for 2.2 seconds...')
+    // 11 & 12. Cover camera for at least 2 seconds
+    console.log('\n[Step 11 & 12] Simulating camera covered for 2.2 seconds...')
     await cdp.evaluate(`window.__feedMode = 'covered';`)
     await sleep(2200)
-    await cdp.captureScreenshot('06_recruiter_dashboard_camera_covered.png')
+    await cdp.captureScreenshot('step06_recruiter_dashboard_camera_covered.png')
 
-    const coveredCheck = await cdp.evaluate(`
+    const cameraCoveredCheck = await cdp.evaluate(`
       (() => {
         const text = document.body.innerText;
+        const riskScore = document.querySelector('.score-prominent')?.innerText;
         return {
-          isInsufficientEvidence: text.includes('Insufficient Evidence'),
+          riskScore,
+          isInsufficientEvidence: text.includes('Insufficient Evidence') || text.includes('INSUFFICIENT EVIDENCE'),
           isConfidenceLow: text.includes('Low'),
           isVisualSignalNotAvailable: text.includes('NOT AVAILABLE')
         };
       })()
     `)
-    console.log('Camera Covered Check:', coveredCheck)
+    console.log('Camera Covered Check:', cameraCoveredCheck)
 
-    // 13, 14, 15 & 16. Return to camera frame
-    console.log('\n[8/8] Candidate returns to camera frame...')
+    // 13, 14, 15 & 16. Candidate returns to the camera frame!
+    console.log('\n[Step 13, 14, 15 & 16] Candidate returns to camera frame...')
     await cdp.evaluate(`window.__feedMode = 'face';`)
-    await sleep(1800)
-    await cdp.captureScreenshot('07_recruiter_dashboard_evidence_restored.png')
+    await sleep(2000)
+    await cdp.captureScreenshot('step07_recruiter_dashboard_evidence_restored.png')
 
-    const restoredCheck = await cdp.evaluate(`
+    const recruiterRestoredCheck = await cdp.evaluate(`
       (() => {
         const text = document.body.innerText;
         const events = Array.from(document.querySelectorAll('.incident-headline')).map(e => e.innerText);
         const riskScore = document.querySelector('.score-prominent')?.innerText;
+        const statusTag = document.querySelector('.spectrum-label-tag')?.innerText;
+        const faceRow = Array.from(document.querySelectorAll('.signal-data-row'))[0]?.innerText;
         return {
           riskScore,
-          status: text.includes('Low Risk') ? 'Low Risk' : 'Other',
+          statusTag,
+          isLowRisk: statusTag ? statusTag.toLowerCase().includes('low risk') : false,
           confidenceHigh: text.includes('High'),
           hasRestoredEvent: events.includes('Visual evidence restored'),
           timelineEvents: events.slice(0, 4),
-          visualEvidenceRestored: !text.includes('NOT AVAILABLE')
+          faceSignalNotRestored: text.includes('NOT AVAILABLE'),
+          faceRowText: faceRow ? faceRow.replace(/\\n/g, ' · ') : null
         };
       })()
     `)
-    console.log('Evidence Restored Verification:', restoredCheck)
+    console.log('Evidence Restored Check:', recruiterRestoredCheck)
 
     await cdp.evaluate(`window.__animRunning = false;`)
     cdp.close()
     chromeProcess.kill()
 
-    console.log('\n==================================================================')
-    console.log('🎉 ALL 16 REQUIREMENTS OF THE CRITICAL LIVE SENSOR PIPELINE PASSED!')
-    console.log('==================================================================')
-    process.exit(0)
+    // Assertions
+    const passed =
+      candidateFaceCheck.hasFaceVisible &&
+      candidateFaceCheck.hasBoundingBox &&
+      candidateOutsideCheck.hasFaceNotVisible &&
+      candidateOutsideCheck.boxHidden &&
+      recruiterMissingCheck.riskScore === '32' &&
+      recruiterMissingCheck.isInsufficientEvidence &&
+      recruiterMissingCheck.isConfidenceLow &&
+      recruiterMissingCheck.isVisualSignalNotAvailable &&
+      recruiterMissingCheck.hasMissingEvent &&
+      cameraCoveredCheck.riskScore === '32' &&
+      cameraCoveredCheck.isInsufficientEvidence &&
+      Number(recruiterRestoredCheck.riskScore) <= 16 &&
+      recruiterRestoredCheck.isLowRisk &&
+      recruiterRestoredCheck.confidenceHigh &&
+      recruiterRestoredCheck.hasRestoredEvent &&
+      !recruiterRestoredCheck.faceSignalNotRestored
+
+    if (passed) {
+      console.log('\n====================================================================')
+      console.log('✅ ALL 16 REQUIREMENTS OF THE CRITICAL LIVE SENSOR PIPELINE PASSED!')
+      console.log('====================================================================')
+      process.exit(0)
+    } else {
+      console.error('\n❌ Some checks failed! Details:', {
+        candidateFaceCheck,
+        candidateOutsideCheck,
+        recruiterMissingCheck,
+        cameraCoveredCheck,
+        recruiterRestoredCheck,
+      })
+      process.exit(1)
+    }
   } catch (err) {
-    console.error('❌ Test failed:', err)
+    console.error('❌ Test failed with exception:', err)
     chromeProcess.kill()
     process.exit(1)
   }
