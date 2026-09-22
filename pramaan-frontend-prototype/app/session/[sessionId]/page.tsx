@@ -25,7 +25,6 @@ export default function SessionPage({ params }: SessionPageProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--surface-canvas)] font-sans antialiased text-[var(--ink-black)]">
-      {/* Shared Navigation Sidebar */}
       <Sidebar
         currentView="live"
         onViewChange={handleViewChange}
@@ -33,7 +32,6 @@ export default function SessionPage({ params }: SessionPageProps) {
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header Bar */}
         <header className="institutional-header">
           <div className="header-meta-group">
             <span className="header-title-badge">
@@ -56,7 +54,7 @@ export default function SessionPage({ params }: SessionPageProps) {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[var(--verified-bg)] border border-[rgba(25,135,84,0.2)] text-[11px] text-[var(--verified-green)] font-medium">
               <span className="w-2 h-2 rounded-full bg-[var(--verified-green)] animate-pulse" />
-              <span>Realtime browser sensors active</span>
+              <span>Single shared state</span>
             </div>
 
             <Link
@@ -70,10 +68,8 @@ export default function SessionPage({ params }: SessionPageProps) {
           </div>
         </header>
 
-        {/* Workspace Content: Single Shared Interview Page */}
         <main className="workspace-content overflow-y-auto p-4">
           <div className="max-w-7xl mx-auto flex flex-col gap-3">
-            {/* Header breadcrumb & info strip */}
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-hairline)]">
               <div className="flex items-center gap-2">
                 <Link
@@ -99,7 +95,6 @@ export default function SessionPage({ params }: SessionPageProps) {
               </div>
             </div>
 
-            {/* Shared Candidate & Recruiter Console */}
             <SharedSessionRoom sessionId={decodedSessionId} />
           </div>
         </main>

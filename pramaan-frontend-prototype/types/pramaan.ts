@@ -1,5 +1,17 @@
 export type Scenario = 'normal' | 'proxy' | 'low-bandwidth'
 
+export type SessionState =
+  | 'PRECHECK'
+  | 'CAMERA_REQUESTED'
+  | 'MONITORING'
+  | 'CHALLENGE_ISSUED'
+  | 'WAITING_FOR_RESPONSE'
+  | 'CHALLENGE_PASSED'
+  | 'CHALLENGE_PARTIAL'
+  | 'CHALLENGE_FAILED'
+  | 'EVIDENCE_UNAVAILABLE'
+  | 'ENDED'
+
 export type IntegrityStatus =
   | 'Not evaluated'
   | 'Low Risk'
@@ -7,7 +19,7 @@ export type IntegrityStatus =
   | 'Insufficient Evidence'
   | 'High Concern'
 
-export type ChallengeStatus = 'pending' | 'waiting_for_response' | 'passed' | 'partial' | 'failed'
+export type ChallengeStatus = 'pending' | 'waiting_for_response' | 'passed' | 'partial' | 'failed' | 'expired'
 
 export type EventType = 'normal' | 'warning' | 'critical' | 'info'
 
@@ -20,7 +32,7 @@ export interface TimelineEvent {
 }
 
 export interface SignalScores {
-  face: number | null // null denotes "Low confidence" or "Waiting for camera"
+  face: number | null
   voice: number | null
   challenge: number | null
   stream: number | null
@@ -28,7 +40,7 @@ export interface SignalScores {
 
 export interface ScenarioData {
   name: string
-  risk: number | null // null represents "Not evaluated"
+  risk: number | null
   status: IntegrityStatus
   confidence: 'High' | 'Medium' | 'Low' | 'Not available'
   scores: SignalScores
@@ -70,3 +82,17 @@ export interface FacePresenceState {
   wasRestored?: boolean
 }
 
+export interface SessionMode {
+  mode: 'LIVE' | 'DEMO'
+  demoScenario?: Scenario
+}
+
+export interface MicrophoneState {
+  status: 'NOT_STARTED' | 'ACTIVE' | 'UNAVAILABLE'
+  level: number
+}
+
+export interface CameraState {
+  status: 'NOT_STARTED' | 'ACTIVE' | 'STOPPED' | 'PERMISSION_DENIED'
+  stream: MediaStream | null
+}

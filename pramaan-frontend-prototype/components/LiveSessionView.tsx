@@ -139,8 +139,7 @@ export function LiveSessionView({
 
   // Smoothly animated risk score
   const animatedRisk = useAnimatedNumber(data.risk ?? 0, 400)
-  // Calculate position along the spectrum (0% to 100%)
-  const spectrumPosition = Math.min(Math.max(animatedRisk, 0), 100)
+  const spectrumPosition = data.risk === null ? 0 : Math.min(Math.max(animatedRisk, 0), 100)
 
   return (
     <div className="flex flex-col gap-3">
@@ -211,7 +210,7 @@ export function LiveSessionView({
               ) : (
                 <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-strong)]" />
-                  Demo scenario active
+                  Camera not started
                 </span>
               )}
             </div>
@@ -231,12 +230,12 @@ export function LiveSessionView({
                   <div className="fallback-video-slate">
                     <Camera size={24} className="text-[#8E928F]" />
                     <div className="text-xs font-semibold text-white">
-                      {cameraError ? 'Camera stream fallback' : 'Simulated video feed'}
+                      {cameraError ? 'Camera unavailable' : 'Camera not started'}
                     </div>
                     <div className="text-[11px] text-[#A6AAA7] max-w-[220px]">
                       {cameraError
-                        ? 'Camera unavailable. Deterministic session signals active.'
-                        : 'Webcam off. Click "Start camera" to connect live feed.'}
+                        ? 'Camera permission denied or unavailable.'
+                        : 'Click "Start camera" to initialize local MediaPipe detector.'}
                     </div>
                   </div>
                 )}
@@ -295,9 +294,9 @@ export function LiveSessionView({
 
                 {/* Video Telemetry Strip */}
                 <div className="video-telemetry-strip font-mono">
-                  <span>{stream ? `${streamInfo.resolution} · ${streamInfo.fps}` : (isPoor ? '480p · 15 FPS' : '1080p · 30 FPS')}</span>
+                  <span>{stream ? `${streamInfo.resolution} · ${streamInfo.fps}` : 'Camera not started'}</span>
                   <span className={faceState?.isLiveActive ? 'text-[var(--verified-green)]' : 'text-[var(--text-muted)]'}>
-                    {faceState?.isLiveActive ? 'Browser sensor active' : 'Demo scenario active'}
+                    {faceState?.isLiveActive ? 'Browser sensor active' : 'Sensor idle'}
                   </span>
                 </div>
               </div>
@@ -306,7 +305,7 @@ export function LiveSessionView({
               <div className="text-[10px] text-[var(--text-muted)] italic leading-tight px-1">
                 {faceState?.isLiveActive
                   ? 'Browser sensor active: Biometric presence processed locally on-device. Zero raw video uploaded.'
-                  : 'Camera preview is live. Integrity scores are controlled through Demo Lab for this prototype.'}
+                  : 'Camera not started. Start camera to begin real-time biometric evaluation.'}
               </div>
 
             {/* Hardware Status Records */}
@@ -343,7 +342,7 @@ export function LiveSessionView({
                   <span>Stream context:</span>
                 </div>
                 <span className="font-mono text-[var(--ink-black)]">
-                  {stream ? streamInfo.bandwidth : (isPoor ? 'Degraded (420 kbps)' : 'Optimal (3,200 kbps)')}
+                  {stream ? streamInfo.bandwidth : 'Waiting for camera'}
                 </span>
               </div>
 
@@ -433,9 +432,9 @@ export function LiveSessionView({
                 className="score-prominent font-mono transition-colors duration-300"
                 style={{ color: getStatusColor(data.status) }}
               >
-                {animatedRisk}
+                {data.risk === null ? '--' : animatedRisk}
               </span>
-              <span className="text-sm font-mono text-[var(--text-muted)]">/ 100</span>
+              <span className="text-sm font-mono text-[var(--text-muted)]">{data.risk === null ? '' : '/ 100'}</span>
             </div>
 
             <div
@@ -453,13 +452,15 @@ export function LiveSessionView({
           {/* Flat Confidence Spectrum Track */}
           <div className="spectrum-track-wrap">
             <div className="spectrum-bar-axis">
-              <div
-                className="spectrum-pin-indicator"
-                style={{
-                  left: `${spectrumPosition}%`,
-                  backgroundColor: getStatusColor(data.status),
-                }}
-              />
+              {data.risk !== null && (
+                <div
+                  className="spectrum-pin-indicator"
+                  style={{
+                    left: `${spectrumPosition}%`,
+                    backgroundColor: getStatusColor(data.status),
+                  }}
+                />
+              )}
             </div>
             <div className="spectrum-scale-legend">
               <span className="text-[var(--verified-green)]">Low risk</span>
@@ -551,7 +552,7 @@ export function LiveSessionView({
                 className="signal-score-badge"
                 style={{ color: getSignalColor(data.scores.voice) }}
               >
-                {data.scores.voice} / 100
+                {data.scores.voice === null ? 'NOT AVAILABLE' : `${data.scores.voice} / 100`}
               </span>
             </div>
             <div className="flat-signal-bar">
@@ -630,7 +631,7 @@ export function LiveSessionView({
                 className="signal-score-badge"
                 style={{ color: getSignalColor(data.scores.stream) }}
               >
-                {data.scores.stream} / 100
+                {data.scores.stream === null ? 'NOT AVAILABLE' : `${data.scores.stream} / 100`}
               </span>
             </div>
             <div className="flat-signal-bar">
@@ -701,9 +702,9 @@ export function LiveSessionView({
         <div className="p-3 border-t border-[var(--border-hairline)] bg-[var(--surface-subtle)] text-[11px] text-[var(--text-muted)] flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <Clock size={12} className="text-[var(--cobalt)]" />
-            <span>Audit active</span>
+            <span>Evidence audit</span>
           </span>
-          <span className="font-mono text-[var(--ink-black)]">05:00</span>
+          <span className="font-mono text-[var(--ink-black)]">{events.length} events recorded</span>
         </div>
       </div>
     </div>

@@ -28,11 +28,11 @@ function formatRiskStatus(status: string): IntegrityStatus {
     case 'HIGH_CONCERN':
       return 'High Concern'
     default:
-      return 'Low Risk'
+      return 'Not evaluated'
   }
 }
 
-function formatConfidence(conf: string): 'High' | 'Medium' | 'Low' {
+function formatConfidence(conf: string): 'High' | 'Medium' | 'Low' | 'Not available' {
   switch (conf) {
     case 'HIGH':
       return 'High'
@@ -41,7 +41,7 @@ function formatConfidence(conf: string): 'High' | 'Medium' | 'Low' {
     case 'LOW':
       return 'Low'
     default:
-      return 'High'
+      return 'Not available'
   }
 }
 
@@ -60,11 +60,11 @@ export default function PramaanApp() {
 
   // Browser-side face presence detection state
   const [faceState, setFaceState] = useState<FacePresenceState>({
-    liveState: 'DETECTOR_LOADING',
+    liveState: 'WAITING_FOR_CAMERA',
     isLiveActive: false,
-    faceVisible: true,
-    confidence: 94,
-    motionScore: 94,
+    faceVisible: false,
+    confidence: 0,
+    motionScore: null,
     isCovered: false,
     isOutsideFrame: false,
     missingDurationMs: 0,
