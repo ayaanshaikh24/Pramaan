@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String             @id @default(uuid())
+  name      String
+  email     String             @unique
+  role      String             @default("RECRUITER") // RECRUITER | ADMIN
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  sessions  InterviewSession[]
+
+  @@index([email])
+}
+
+model InterviewSession {
+  id              String           @id @default(uuid())
+  publicId        String           @unique
+  candidateName   String
+  candidateEmail  String
+  candidateRole   String
+  interviewStage  String
+  status          String           @default("CREATED") // CREATED | ACTIVE | PAUSED | ENDED
+  scenario        String           @default("NORMAL")  // NORMAL | PROXY | LOW_BANDWIDTH
+  riskScore       Int              @default(12)
+  riskStatus      String           @default("LOW_RISK") // LOW_RISK | REVIEW_RECOMMENDED | INSUFFICIENT_EVIDENCE | HIGH_CONCERN
+  confidence      String           @default("HIGH")     // HIGH | MEDIUM | LOW
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  recruiterId     String
+  recruiter       User             @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+
+  candidateAccess CandidateAccess?
+  consent         ConsentRecord?
+  signals         SignalSnapshot[]
+  challenges      Challenge[]
+  events          IntegrityEvent[]
+  reports         Report[]
+  auditLogs       AuditLog[]
+
+  @@index([publicId])
+  @@index([recruiterId])
+  @@index([status])
+}
+
+model CandidateAccess {
+  id        String           @id @default(uuid())
+  sessionId String           @unique
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime         @default(now())
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+}
+
+model ConsentRecord {
+  id                      String           @id @default(uuid())
+  sessionId               String           @unique
+  candidateName           String
+  cameraConsent           Boolean          @default(false)
+  microphoneConsent       Boolean          @default(false)
+  signalProcessingConsent Boolean          @default(false)
+  consentVersion          String           @default("v1")
+  consentedAt             DateTime         @default(now())
+  withdrawnAt             DateTime?
+  session                 InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SignalSnapshot {
+  id                      String           @id @default(uuid())
+  sessionId               String
+  faceMotionScore         Int?
+  lipSyncScore            Int?
+  challengeScore          Int?
+  streamQualityScore      Int?
+  visualEvidenceAvailable Boolean          @default(true)
+  audioEvidenceAvailable  Boolean          @default(true)
+  confidence              String           @default("HIGH") // HIGH | MEDIUM | LOW
+  createdAt               DateTime         @default(now())
+  session                 InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model Challenge {
+  id               String           @id @default(uuid())
+  sessionId        String
+  prompt           String
+  status           String           @default("ISSUED") // ISSUED | PASSED | PARTIAL | FAILED | EXPIRED
+  issuedAt         DateTime         @default(now())
+  completedAt      DateTime?
+  responseMetadata String?          // JSON string
+  createdAt        DateTime         @default(now())
+  session          InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model IntegrityEvent {
+  id               String           @id @default(uuid())
+  sessionId        String
+  timestampSeconds Int              @default(0)
+  type             String           @default("SYSTEM") // SYSTEM | VERIFIED | WARNING | REVIEW
+  title            String
+  description      String
+  severity         String           @default("info")   // info | normal | warning | critical
+  metadata         String?          // JSON string
+  createdAt        DateTime         @default(now())
+  session          InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model Report {
+  id          String           @id @default(uuid())
+  sessionId   String
+  generatedBy String
+  reportData  String           // JSON string
+  generatedAt DateTime         @default(now())
+  session     InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model AuditLog {
+  id        String            @id @default(uuid())
+  sessionId String?
+  actorType String            // RECRUITER | CANDIDATE | SYSTEM
+  action    String
+  metadata  String?           // JSON string
+  createdAt DateTime          @default(now())
+  session   InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([actorType])
+}

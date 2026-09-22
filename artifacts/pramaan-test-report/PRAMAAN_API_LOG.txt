@@ -1,0 +1,199 @@
+[2026-09-22T14:11:52.949Z] GET /health -> HTTP 200 (30ms)
+Request: None
+Response: {"status":"ok","product":"PRAMAAN Integrity Backend","timestamp":"2026-09-22T14:11:52.944Z","uptime":1062.824642875}
+----------------------------------------
+
+[2026-09-22T14:11:52.988Z] POST /api/auth/demo-login -> HTTP 200 (6ms)
+Request: {"email":"recruiter@pramaan.demo","name":"Demo Recruiter"}
+Response: {"user":{"id":"f7bd0a51-437a-4300-afb5-cd9af1a54414","name":"Demo Recruiter","email":"recruiter@pramaan.demo","role":"RECRUITER"},"token":"[MASKED_JWT_TOKEN]"}
+----------------------------------------
+
+[2026-09-22T14:11:52.990Z] GET /api/auth/me -> HTTP 200 (2ms)
+Request: None
+Response: {"user":{"id":"f7bd0a51-437a-4300-afb5-cd9af1a54414","name":"Demo Recruiter","email":"recruiter@pramaan.demo","role":"RECRUITER","createdAt":"2026-09-22T12:33:30.275Z"}}
+----------------------------------------
+
+[2026-09-22T14:11:52.993Z] POST /api/auth/demo-login -> HTTP 400 (3ms)
+Request: {"email":"not-an-email"}
+Response: {"error":"Validation failed","details":[{"path":"email","message":"Invalid email"},{"path":"name","message":"Required"}]}
+----------------------------------------
+
+[2026-09-22T14:11:52.995Z] GET /api/sessions -> HTTP 401 (2ms)
+Request: None
+Response: {"error":"Missing or malformed authorization token"}
+----------------------------------------
+
+[2026-09-22T14:11:53.000Z] POST /api/sessions -> HTTP 201 (5ms)
+Request: {"candidateName":"Candidate #CX0104","candidateEmail":"candidate@example.com","candidateRole":"Junior Frontend Engineer","interviewStage":"Technical Round 1"}
+Response: {"id":"c8a78601-9e8b-43dc-8de8-1d9cf0251b08","publicId":"PRM-CX4724","candidateName":"Candidate #CX0104","candidateRole":"Junior Frontend Engineer","candidateInviteUrl":"http://localhost:3000/?view=candidate&sessionId=PRM-CX4724&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSWQiOiJjOGE3ODYw
+----------------------------------------
+
+[2026-09-22T14:11:53.002Z] GET /api/sessions/PRM-CX4724 -> HTTP 200 (2ms)
+Request: None
+Response: {"session":{"id":"c8a78601-9e8b-43dc-8de8-1d9cf0251b08","publicId":"PRM-CX4724","candidateName":"Candidate #CX0104","candidateEmail":"candidate@example.com","candidateRole":"Junior Frontend Engineer","interviewStage":"Technical Round 1","status":"CREATED","scenario":"NORMAL","riskScore":12,"riskStat
+----------------------------------------
+
+[2026-09-22T14:11:53.007Z] POST /api/sessions/PRM-CX0104/start -> HTTP 200 (5ms)
+Request: {}
+Response: {"session":{"id":"b40115cf-20e9-4568-b4ca-bc812f74863d","publicId":"PRM-CX0104","candidateName":"Candidate #CX0104","candidateEmail":"candidate@example.com","candidateRole":"Junior Frontend Engineer","interviewStage":"Technical Round 1","status":"ACTIVE","scenario":"NORMAL","riskScore":12,"riskStatu
+----------------------------------------
+
+[2026-09-22T14:11:53.011Z] GET /api/sessions/PRM-CX0104/events -> HTTP 200 (4ms)
+Request: None
+Response: {"events":[{"id":"e3f8d62f-60fa-4ec5-9000-0cf98f4a64fd","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","timestampSeconds":300,"type":"VERIFIED","title":"Integrity status updated","description":"All 4 signal vectors consistent and within normal parameters.","severity":"normal","metadata":null,"cr
+----------------------------------------
+
+[2026-09-22T14:11:53.017Z] POST /api/sessions/PRM-CX0104/consent -> HTTP 201 (6ms)
+Request: {"cameraConsent":true,"microphoneConsent":true,"signalProcessingConsent":true,"consentVersion":"v1"}
+Response: {"consent":{"id":"363ab969-d066-4886-831b-6e1e3d3cc821","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","candidateName":"Candidate #CX0104","cameraConsent":true,"microphoneConsent":true,"signalProcessingConsent":true,"consentVersion":"v1","consentedAt":"2026-09-22T14:11:53.014Z","withdrawnAt":nul
+----------------------------------------
+
+[2026-09-22T14:11:53.020Z] GET /api/sessions/PRM-CX0104 -> HTTP 200 (3ms)
+Request: None
+Response: {"session":{"id":"b40115cf-20e9-4568-b4ca-bc812f74863d","publicId":"PRM-CX0104","candidateName":"Candidate #CX0104","candidateEmail":"candidate@example.com","candidateRole":"Junior Frontend Engineer","interviewStage":"Technical Round 1","status":"ACTIVE","scenario":"NORMAL","riskScore":12,"riskStatu
+----------------------------------------
+
+[2026-09-22T14:11:53.025Z] POST /api/sessions/PRM-CX0104/challenges -> HTTP 201 (4ms)
+Request: {}
+Response: {"challenge":{"id":"b38ba894-388b-4747-ab98-3f64d813ef0f","prompt":"Turn slightly left and say PURPLE 63","issuedAt":"2026-09-22T14:11:53.023Z","expiresAt":"2026-09-22T14:12:18.023Z","durationSeconds":20}}
+----------------------------------------
+
+[2026-09-22T14:11:53.030Z] POST /api/challenges/b38ba894-388b-4747-ab98-3f64d813ef0f/result -> HTTP 200 (5ms)
+Request: {"result":"PASSED","responseDurationMs":4200,"clientTimestamp":"2026-09-22T14:11:53.025Z"}
+Response: {"challenge":{"id":"b38ba894-388b-4747-ab98-3f64d813ef0f","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","prompt":"Turn slightly left and say PURPLE 63","status":"PASSED","issuedAt":"2026-09-22T14:11:53.023Z","completedAt":"2026-09-22T14:11:53.027Z","responseMetadata":"{\"responseDurationMs\":42
+----------------------------------------
+
+[2026-09-22T14:11:53.035Z] POST /api/sessions/PRM-CX0104/challenges -> HTTP 201 (5ms)
+Request: {}
+Response: {"challenge":{"id":"c87a5399-41d3-4fb6-ba40-68f0eb1f2e69","prompt":"Turn your head slightly to the right and say BLUE 47","issuedAt":"2026-09-22T14:11:53.033Z","expiresAt":"2026-09-22T14:12:18.033Z","durationSeconds":20}}
+----------------------------------------
+
+[2026-09-22T14:11:53.039Z] POST /api/challenges/c87a5399-41d3-4fb6-ba40-68f0eb1f2e69/result -> HTTP 200 (4ms)
+Request: {"result":"PARTIAL","responseDurationMs":6500,"clientTimestamp":"2026-09-22T14:11:53.035Z"}
+Response: {"challenge":{"id":"c87a5399-41d3-4fb6-ba40-68f0eb1f2e69","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","prompt":"Turn your head slightly to the right and say BLUE 47","status":"PARTIAL","issuedAt":"2026-09-22T14:11:53.033Z","completedAt":"2026-09-22T14:11:53.036Z","responseMetadata":"{\"respon
+----------------------------------------
+
+[2026-09-22T14:11:53.043Z] POST /api/sessions/PRM-CX0104/challenges -> HTTP 201 (4ms)
+Request: {}
+Response: {"challenge":{"id":"08f028be-6b98-4e2a-86d1-d2f55eeb843d","prompt":"Look straight at the camera and say GREEN 82","issuedAt":"2026-09-22T14:11:53.041Z","expiresAt":"2026-09-22T14:12:18.041Z","durationSeconds":20}}
+----------------------------------------
+
+[2026-09-22T14:11:53.046Z] POST /api/challenges/08f028be-6b98-4e2a-86d1-d2f55eeb843d/result -> HTTP 200 (3ms)
+Request: {"result":"FAILED","responseDurationMs":8000,"clientTimestamp":"2026-09-22T14:11:53.043Z"}
+Response: {"challenge":{"id":"08f028be-6b98-4e2a-86d1-d2f55eeb843d","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","prompt":"Look straight at the camera and say GREEN 82","status":"FAILED","issuedAt":"2026-09-22T14:11:53.041Z","completedAt":"2026-09-22T14:11:53.044Z","responseMetadata":"{\"responseDuratio
+----------------------------------------
+
+[2026-09-22T14:11:53.052Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 201 (6ms)
+Request: {"faceMotionScore":94,"lipSyncScore":96,"challengeScore":100,"streamQualityScore":92,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true}
+Response: {"signals":{"id":"bda7c5bd-53e7-4874-afff-cd14efda7f4e","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","faceMotionScore":94,"lipSyncScore":96,"challengeScore":100,"streamQualityScore":92,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"confidence":"HIGH","createdAt":"2026-09-22T14:1
+----------------------------------------
+
+[2026-09-22T14:11:53.057Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 201 (5ms)
+Request: {"faceMotionScore":54,"lipSyncScore":38,"challengeScore":50,"streamQualityScore":84,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true}
+Response: {"signals":{"id":"6f913c2e-389d-4f9f-99ae-fa8e306f4aec","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","faceMotionScore":54,"lipSyncScore":38,"challengeScore":50,"streamQualityScore":84,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"confidence":"MEDIUM","createdAt":"2026-09-22T14:
+----------------------------------------
+
+[2026-09-22T14:11:53.062Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 201 (5ms)
+Request: {"faceMotionScore":null,"lipSyncScore":86,"challengeScore":100,"streamQualityScore":24,"visualEvidenceAvailable":false,"audioEvidenceAvailable":true}
+Response: {"signals":{"id":"246ac99d-28d3-4b26-9b09-aeec41ed3737","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","faceMotionScore":null,"lipSyncScore":86,"challengeScore":100,"streamQualityScore":24,"visualEvidenceAvailable":false,"audioEvidenceAvailable":true,"confidence":"LOW","createdAt":"2026-09-22T14
+----------------------------------------
+
+[2026-09-22T14:11:53.067Z] POST /api/sessions/PRM-CX0104/scenario -> HTTP 200 (5ms)
+Request: {"scenario":"NORMAL"}
+Response: {"scenario":"NORMAL","riskScore":12,"riskStatus":"LOW_RISK","confidence":"HIGH","explanation":"Signals are consistent across face motion, voice timing, challenge response and stream quality.","signals":{"id":"f6784cd7-7524-47ef-b30b-bda3a60509db","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","f
+----------------------------------------
+
+[2026-09-22T14:11:53.072Z] POST /api/sessions/PRM-CX0104/scenario -> HTTP 200 (5ms)
+Request: {"scenario":"PROXY"}
+Response: {"scenario":"PROXY","riskScore":78,"riskStatus":"REVIEW_RECOMMENDED","confidence":"MEDIUM","explanation":"Multiple signals require human review: speech timing discrepancy, reduced natural motion, and live challenge only partially completed.","signals":{"id":"4e3e4d62-0c38-4dc2-9541-0d5380613ac2","se
+----------------------------------------
+
+[2026-09-22T14:11:53.077Z] POST /api/sessions/PRM-CX0104/scenario -> HTTP 200 (5ms)
+Request: {"scenario":"LOW_BANDWIDTH"}
+Response: {"scenario":"LOW_BANDWIDTH","riskScore":32,"riskStatus":"INSUFFICIENT_EVIDENCE","confidence":"LOW","explanation":"Poor video quality lowers confidence. It does not prove dishonesty. Visual evidence is limited because of stream quality.","signals":{"id":"af0416c7-da24-4a97-b3c3-0c3ea03b3af9","session
+----------------------------------------
+
+[2026-09-22T14:11:53.080Z] GET /api/sessions/PRM-CX0104/events -> HTTP 200 (3ms)
+Request: None
+Response: {"events":[{"id":"375c4f59-beb7-419f-a791-eb20b2f7c2ef","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","timestampSeconds":300,"type":"SYSTEM","title":"Stream quality degraded","description":"Visual evidence confidence reduced. Fairness safeguard applied.","severity":"warning","metadata":null,"cr
+----------------------------------------
+
+[2026-09-22T14:11:53.083Z] GET /api/sessions/PRM-CX0104/events?filter=verified -> HTTP 200 (3ms)
+Request: None
+Response: {"events":[{"id":"708d46be-34a2-4778-9a68-9bf0171b146f","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","timestampSeconds":300,"type":"VERIFIED","title":"Integrity status updated","description":"All 4 signal vectors consistent and within normal parameters.","severity":"normal","metadata":null,"cr
+----------------------------------------
+
+[2026-09-22T14:11:53.087Z] GET /api/sessions/PRM-CX0104/events?filter=warning -> HTTP 200 (4ms)
+Request: None
+Response: {"events":[{"id":"79e509bf-f805-4962-8199-b1c83eb1adb1","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","timestampSeconds":300,"type":"WARNING","title":"Lip-sync anomaly & reduced motion","description":"Speech timing divergence and live challenge only partially completed.","severity":"critical","
+----------------------------------------
+
+[2026-09-22T14:11:53.092Z] POST /api/sessions/PRM-CX0104/scenario -> HTTP 200 (5ms)
+Request: {"scenario":"NORMAL"}
+Response: {"scenario":"NORMAL","riskScore":12,"riskStatus":"LOW_RISK","confidence":"HIGH","explanation":"Signals are consistent across face motion, voice timing, challenge response and stream quality.","signals":{"id":"f90669e2-5289-4970-b969-63a836d49945","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","f
+----------------------------------------
+
+[2026-09-22T14:11:53.097Z] POST /api/sessions/PRM-CX0104/report -> HTTP 201 (5ms)
+Request: {}
+Response: {"report":{"id":"d3361667-b755-4c92-8a4b-4f58fcc8bd73","sessionId":"b40115cf-20e9-4568-b4ca-bc812f74863d","generatedAt":"2026-09-22T14:11:53.096Z","reportData":{"product":"PRAMAAN Interview Integrity Layer","version":"1.0.0-hackathon","generatedAt":"2026-09-22T14:11:53.095Z","session":{"id":"b40115c
+----------------------------------------
+
+[2026-09-22T14:11:53.100Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 400 (2ms)
+Request: {"faceMotionScore":90,"lipSyncScore":90,"challengeScore":100,"streamQualityScore":90,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"video":"dummy_binary_payload_attempt"}
+Response: {"error":"Validation failed","details":[{"path":"video","message":"Privacy policy violation: Raw media field 'video' is prohibited. PRAMAAN only processes derived numeric signal telemetry."}]}
+----------------------------------------
+
+[2026-09-22T14:11:53.102Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 400 (2ms)
+Request: {"faceMotionScore":90,"lipSyncScore":90,"challengeScore":100,"streamQualityScore":90,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"audio":"dummy_binary_payload_attempt"}
+Response: {"error":"Validation failed","details":[{"path":"audio","message":"Privacy policy violation: Raw media field 'audio' is prohibited. PRAMAAN only processes derived numeric signal telemetry."}]}
+----------------------------------------
+
+[2026-09-22T14:11:53.104Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 400 (2ms)
+Request: {"faceMotionScore":90,"lipSyncScore":90,"challengeScore":100,"streamQualityScore":90,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"image":"dummy_binary_payload_attempt"}
+Response: {"error":"Validation failed","details":[{"path":"image","message":"Privacy policy violation: Raw media field 'image' is prohibited. PRAMAAN only processes derived numeric signal telemetry."}]}
+----------------------------------------
+
+[2026-09-22T14:11:53.106Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 400 (2ms)
+Request: {"faceMotionScore":90,"lipSyncScore":90,"challengeScore":100,"streamQualityScore":90,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"frame":"dummy_binary_payload_attempt"}
+Response: {"error":"Validation failed","details":[{"path":"frame","message":"Privacy policy violation: Raw media field 'frame' is prohibited. PRAMAAN only processes derived numeric signal telemetry."}]}
+----------------------------------------
+
+[2026-09-22T14:11:53.108Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 400 (2ms)
+Request: {"faceMotionScore":90,"lipSyncScore":90,"challengeScore":100,"streamQualityScore":90,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"recording":"dummy_binary_payload_attempt"}
+Response: {"error":"Validation failed","details":[{"path":"recording","message":"Privacy policy violation: Raw media field 'recording' is prohibited. PRAMAAN only processes derived numeric signal telemetry."}]}
+----------------------------------------
+
+[2026-09-22T14:11:53.110Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 400 (2ms)
+Request: {"faceMotionScore":90,"lipSyncScore":90,"challengeScore":100,"streamQualityScore":90,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"blob":"dummy_binary_payload_attempt"}
+Response: {"error":"Validation failed","details":[{"path":"blob","message":"Privacy policy violation: Raw media field 'blob' is prohibited. PRAMAAN only processes derived numeric signal telemetry."}]}
+----------------------------------------
+
+[2026-09-22T14:11:53.113Z] POST /api/sessions/PRM-CX0104/signals -> HTTP 400 (2ms)
+Request: {"faceMotionScore":90,"lipSyncScore":90,"challengeScore":100,"streamQualityScore":90,"visualEvidenceAvailable":true,"audioEvidenceAvailable":true,"base64":"dummy_binary_payload_attempt"}
+Response: {"error":"Validation failed","details":[{"path":"base64","message":"Privacy policy violation: Raw media field 'base64' is prohibited. PRAMAAN only processes derived numeric signal telemetry."}]}
+----------------------------------------
+
+[2026-09-22T14:11:53.115Z] POST /api/sessions -> HTTP 401 (2ms)
+Request: {"candidateName":"Unauthorized Test"}
+Response: {"error":"Missing or malformed authorization token"}
+----------------------------------------
+
+[2026-09-22T14:11:53.117Z] GET /api/sessions -> HTTP 401 (2ms)
+Request: None
+Response: {"error":"Invalid authentication token"}
+----------------------------------------
+
+[2026-09-22T14:11:53.119Z] POST /api/sessions/PRM-CX0104/report -> HTTP 403 (2ms)
+Request: {}
+Response: {"error":"Candidate cannot access unauthorized session"}
+----------------------------------------
+
+[2026-09-22T14:11:53.121Z] GET /api/sessions/OTHER-SESSION-9999 -> HTTP 403 (2ms)
+Request: None
+Response: {"error":"Candidate cannot access unauthorized session"}
+----------------------------------------
+
+[2026-09-22T14:11:53.124Z] GET /api/sessions/PRM-CX4724 -> HTTP 200 (3ms)
+Request: None
+Response: {"session":{"id":"c8a78601-9e8b-43dc-8de8-1d9cf0251b08","publicId":"PRM-CX4724","candidateName":"Candidate #CX0104","candidateEmail":"candidate@example.com","candidateRole":"Junior Frontend Engineer","interviewStage":"Technical Round 1","status":"CREATED","scenario":"NORMAL","riskScore":12,"riskStat
+----------------------------------------

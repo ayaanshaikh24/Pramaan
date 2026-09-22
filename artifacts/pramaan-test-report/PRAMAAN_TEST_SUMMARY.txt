@@ -1,0 +1,23 @@
+=====================================================
+PRAMAAN VERIFICATION PASS SUMMARY
+=====================================================
+Tested At: 2026-09-22T14:11:53.124Z
+Overall Status: PASS WITH LIMITATIONS (READY FOR DEMO)
+Total Tests: 41
+Passed: 40
+Failed: 0
+Blocked: 1
+
+Environment:
+- Node.js: v24.20.0
+- Backend: Express 4.21.2 + Prisma 5.22.0 (SQLite dev.db) on http://localhost:5001
+- Frontend: Next.js 16.3.3 (Turbopack, React 19) on http://localhost:3000
+- Socket.IO: Active on port 5001
+
+Artifacts Generated:
+- Markdown Report: artifacts/pramaan-test-report/PRAMAAN_TEST_REPORT.md
+- Results JSON: artifacts/pramaan-test-report/PRAMAAN_TEST_RESULTS.json
+- Raw API Log: artifacts/pramaan-test-report/PRAMAAN_API_LOG.txt
+- Generated Audit Report: artifacts/pramaan-test-report/generated-session-report.json
+- Screenshot: artifacts/pramaan-test-report/screenshots/01_homepage.png
+=====================================================
