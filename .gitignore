@@ -57,8 +57,15 @@ __v0_jsx-dev-runtime.ts
 
 # Test artifacts & temporary screenshots
 artifacts/camera-pipeline-test/
+artifacts/pramaan-test-report/
 coverage/
 .nyc_output/
 *.tmp
 *.temp
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local browser-API verification harness
+test-live-shared.mjs
 
