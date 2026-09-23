@@ -11,7 +11,22 @@ import { detectFaceInVideo, initializeFaceDetector, destroyFaceDetector, FaceDet
 import { BrowserSpeechSession, isSpeechRecognitionSupported } from '@/lib/speechRecognition'
 import { useSessionState } from '@/lib/sessionState'
 
-const CHALLENGE_PROMPT = 'Turn your head slightly to the right and say BLUE 47.'
+const CHALLENGE_PROMPTS = [
+  'Turn your head slightly to the right and say BLUE 47.',
+  'Hold up three fingers and say HELLO WORLD.',
+  'Look to your left, then back at the camera and say GREEN 12.',
+  'Touch your nose and say PRAMAAN VERIFIED.',
+  'Wave at the camera and say CHECK 99.',
+  'Nod your head and say CONFIRM SESSION.',
+  'Look up, then back down and say RED 25.',
+  'Smile at the camera and say PASS CODE 7.',
+  'Blink twice and say DELTA ECHO.',
+  'Tilt your head right and say ORANGE 64.',
+]
+
+function getRandomChallenge(): string {
+  return CHALLENGE_PROMPTS[Math.floor(Math.random() * CHALLENGE_PROMPTS.length)]
+}
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -293,16 +308,17 @@ export function SharedSessionRoom({ sessionId = 'PRM-CX0104', scenario = 'normal
   }, [stream])
 
   const handleIssueChallenge = async () => {
-    update({ challengeIssued: true, challengePrompt: CHALLENGE_PROMPT, challengeStatus: 'waiting_for_response' })
+    const prompt = getRandomChallenge()
+    update({ challengeIssued: true, challengePrompt: prompt, challengeStatus: 'waiting_for_response' })
     setCountdownSeconds(20)
     setSpeechTranscript('')
-    addTimelineEvent({ time: formatTime(new Date()), title: 'Live challenge issued', description: `Challenge: "${CHALLENGE_PROMPT}"`, type: 'info' })
+    addTimelineEvent({ time: formatTime(new Date()), title: 'Live challenge issued', description: `Challenge: "${prompt}"`, type: 'info' })
 
     if (isSpeechRecognitionSupported()) {
       setSpeechActive(true)
       if (speechSessionRef.current) speechSessionRef.current.abort()
       const session = new BrowserSpeechSession({
-        expectedPhrase: CHALLENGE_PROMPT,
+        expectedPhrase: prompt,
         lang: 'en-US',
         onTranscript: setSpeechTranscript,
         onOutcome: (outcome, transcript) => { setSpeechActive(false); setSpeechTranscript(transcript); handleCompleteChallenge(outcome, transcript) },
