@@ -44,7 +44,7 @@ export default function SessionPage({ params }: SessionPageProps) {
 
         <main className="workspace-content overflow-y-auto p-4">
           <div className="max-w-7xl mx-auto">
-            <SharedSessionRoom sessionId={decodedSessionId} />
+            <SharedSessionRoom sessionId={decodedSessionId} scenario={scenario} />
           </div>
         </main>
       </div>

@@ -10,6 +10,7 @@ import {
 export interface SessionContract {
   sessionId: string
   cameraStatus: 'NOT_STARTED' | 'ACTIVE' | 'STOPPED' | 'PERMISSION_DENIED'
+  challengeIssued: boolean
   challengeStatus: ChallengeStatus
   riskScore: number | null
   riskStatus: IntegrityStatus
@@ -40,6 +41,7 @@ function createInitialContract(sessionId: string): SessionContract {
   return {
     sessionId,
     cameraStatus: 'NOT_STARTED',
+    challengeIssued: false,
     challengeStatus: 'pending',
     riskScore: null,
     riskStatus: 'Not evaluated',
@@ -51,7 +53,7 @@ function createInitialContract(sessionId: string): SessionContract {
       { time: '00:00', title: 'Consent pending', description: 'Waiting for candidate biometric consent.', type: 'info' },
     ],
     faceState: { ...INITIAL_FACE_STATE },
-    challengePrompt: 'Turn your head slightly to the right and say BLUE 47.',
+    challengePrompt: '',
   }
 }
 
